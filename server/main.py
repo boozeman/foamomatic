@@ -6,7 +6,9 @@ import secrets
 import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
+from pathlib import Path
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 SOCKET = os.getenv("FOAM_SOCKET", "/run/foamomatic/adapter.sock")
 TOKEN = os.environ.get("FOAM_TOKEN", "")
@@ -33,6 +35,12 @@ async def lifespan(app):
     yield
 
 app = FastAPI(title="Foamomatic XYUV", lifespan=lifespan)
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")
+
+@app.get("/")
+async def status_page():
+    return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"})
 
 @app.get("/health")
 async def health():
@@ -67,7 +75,8 @@ async def websocket(ws: WebSocket):
         if not secrets.compare_digest(auth["token"], TOKEN):
             await ws.close(code=1008)
             return
-        await emit({"type": "ready", "axes": ["X", "Y", "U", "V"],
+        read_only = auth.get("read_only") is True
+        await emit({"type": "ready", "read_only": read_only, "axes": ["X", "Y", "U", "V"],
                     "jog_lease_ms": 400, "jog_renew_ms": 100})
         sender = asyncio.create_task(telemetry())
         async def receive():
@@ -75,6 +84,9 @@ async def websocket(ws: WebSocket):
                 msg = await ws.receive_json()
                 if not isinstance(msg, dict) or msg.get("cmd") not in CONTROL_COMMANDS:
                     await emit({"type": "ack", "ok": False, "error": "Unsupported command"})
+                    continue
+                if read_only:
+                    await emit({"type": "ack", "ok": False, "error": "Read-only session"})
                     continue
                 # Reject queued/stale motion: a one-use challenge is issued by
                 # this gateway with a 250ms expiry for every jog operation.

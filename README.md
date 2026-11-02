@@ -1,7 +1,7 @@
 # Foamomatic
 
 XYUV-only LinuxCNC adapter and container gateway. Initial backend foundation;
-no frontend, G-code upload/run, heater control or hardware watchdog integration yet.
+includes a read-only browser status page; G-code upload/run, heater control and hardware watchdog integration are not implemented yet.
 Not commissioned for operating a physical machine.
 
 ## Deployment architecture
@@ -98,3 +98,31 @@ commissioning work. Browser E-stop is not a replacement for physical E-stop.
 Unit tests use a fake LinuxCNC API to check sparse UV coordinate mapping,
 offsets, lease expiry, competing sessions, wrong geometry and jog validation.
 Real LinuxCNC, Docker build and Mesa operation need Debian-host verification.
+
+
+## Browser status page
+
+Rebuild the gateway image after pulling these changes:
+
+    docker compose up -d --build
+
+Open http://linuxcnc.local:8080 and enter the FOAM_TOKEN from your .env.
+FOAM_ORIGINS must include exactly http://linuxcnc.local:8080.
+The token is used in memory for this connection; it is not saved to browser
+storage or embedded in the served files. Click Connect again after a disconnect.
+
+The page requests a read-only WebSocket session, which the server prevents from
+sending control commands. It shows machine/work coordinates, homing state,
+ESTOP, enable, mode, program state and the latest LinuxCNC error.
+Coordinates use the machine's configured units; the adapter does not yet expose
+a unit label. Numbers below half a displayed decimal step render as zero.
+No wire geometry or movement controls are included in this first screen.
+
+Status older than three seconds, unavailable adapter data, or a closed connection
+clears the live values. Browser reconnection is manual. /health remains a
+gateway-only liveness check.
+
+Additional HTTP/WebSocket tests (fake adapter only):
+
+    python -m pip install -r requirements.txt httpx
+    python -m unittest discover -s tests -v
