@@ -44,6 +44,20 @@ class PreviewWorkerTests(unittest.TestCase):
         fake_gcode.MIN_ERROR=1
         def run(filename,canon,initcodes,interp):
             self.assertIn("G53 G0 X1 Y2 U6 V7",initcodes)
+            # LinuxCNC invokes these even for ordinary G17/G1 programs.
+            canon.set_plane(1)
+            canon.set_traverse_rate(100)
+            canon.comment("AXIS,UV_Z_POS,998")
+            canon.set_feed_rate(900)
+            canon.set_feed_rate(1.4428)  # G93 changes timing, not endpoints
+            self.assertEqual(canon.plane, 1)
+            canon.next_line(SimpleNamespace(sequence_number=1))
+            try:
+                canon.arc_feed()
+            except ValueError:
+                pass
+            self.assertIn("arc_feed, line 1", canon.callback_error)
+            canon.callback_error = None
             canon.next_line(SimpleNamespace(sequence_number=4))
             canon.straight_feed(1,2,0,0,0,0,8,9,0)
             return 0,4

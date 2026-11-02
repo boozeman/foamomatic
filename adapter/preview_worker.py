@@ -2,7 +2,6 @@
 import json
 import math
 from pathlib import Path
-import shutil
 import sys
 import tempfile
 
@@ -26,6 +25,27 @@ def parse(context):
             self.line = 0
             self.segments = []
             self.parameter_file = ""
+            self.callback_error = None
+            # The C extension can overwrite callback exceptions with
+            # "parse_file interp_error". Preserve the original failure.
+            for name in ("next_line", "straight_traverse", "straight_feed",
+                         "arc_feed", "straight_probe", "rigid_tap", "tool_offset",
+                         "set_plane", "set_traverse_rate", "set_feed_rate",
+                         "set_g5x_offset", "set_g92_offset", "set_xy_rotation",
+                         "get_axis_mask", "get_tool", "get_block_delete",
+                         "get_external_length_units", "get_external_angular_units"):
+                callback = getattr(self, name, None)
+                if callback is not None:
+                    setattr(self, name, self.guard(name, callback))
+        def guard(self, name, callback):
+            def invoke(*args):
+                try:
+                    return callback(*args)
+                except Exception as exc:
+                    self.callback_error = "%s, line %s: %s: %s" % (
+                        name, self.line, type(exc).__name__, exc)
+                    raise
+            return invoke
         def next_line(self, state):
             self.line = state.sequence_number
             self.state = state
@@ -55,7 +75,11 @@ def parse(context):
                 raise ValueError("Tool offsets are not supported by XYUV preview")
         def set_feed_rate(self,*args): pass
         def set_spindle_rate(self,*args): pass
-        def select_plane(self,*args): pass
+        def set_plane(self, plane):
+            self.plane = plane
+        def select_plane(self, plane):
+            self.set_plane(plane)
+        def set_traverse_rate(self, rate): pass
         def dwell(self,*args): pass
         def comment(self,*args): pass
         def message(self,*args): pass
@@ -87,7 +111,11 @@ def parse(context):
         code = "G21" if context["linear_units"] == 1 else "G20"
         initial = "G53 G0 " + " ".join(a + str(context["position"][a]) for a in ("X","Y","U","V"))
         wcs = {1:"G54",2:"G55",3:"G56",4:"G57",5:"G58",6:"G59",7:"G59.1",8:"G59.2",9:"G59.3"}[context["g5x_index"]]
-        result, line = gcode.parse(str(program), canon, [code, "G90", wcs, initial], "")
+        try:
+            result, line = gcode.parse(str(program), canon, [code, "G90", wcs, initial], "")
+        except Exception as exc:
+            detail = canon.callback_error or str(exc)
+            raise ValueError("Preview interpreter: " + detail) from exc
         if result > gcode.MIN_ERROR:
             raise ValueError("Line %s: %s" % (line,gcode.strerror(result)))
         return {"segments":canon.segments,"units":"mm","frame":"machine",
