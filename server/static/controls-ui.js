@@ -18,9 +18,9 @@ export function createControls(send) {
     const help=mdiStatus(state,fresh,connected);
     document.getElementById("mdi-help").textContent=help;
     const modeButton=document.getElementById("mdi-mode");
-    modeButton.textContent=fresh&&state?.task_mode===3?"MDI-tila käytössä":"Valitse MDI-tila";
+    modeButton.textContent=fresh&&state?.task_mode===3?"MDI mode active":"Select MDI mode";
     modeButton.title=help;
-    document.getElementById("homing-help").textContent=!fresh?"Odotetaan koneen tilaa.":state.homing?.some(Boolean)?"Kotiajo käynnissä.":state.task_mode!==1?"Valitse käsiajotila kotiajoa varten.":"Valitse kotiajettava akseli tai kaikkien akselien kotiajo.";
+    document.getElementById("homing-help").textContent=!fresh?"Waiting for machine status.":state.homing?.some(Boolean)?"Homing in progress.":state.task_mode!==1?"Select Manual mode to home the axes.":"Select an axis to home, or home all axes.";
   }
   function entry(text){
     const row=document.createElement("li");row.textContent=text;
@@ -33,11 +33,11 @@ export function createControls(send) {
     if(busy&&!urgent)return;
     cancelPreparation();
     if(!urgent)busy=true;
-    render();message.textContent="Lähetetään…";
+    render();message.textContent="Sending…";
     try{
       await send({cmd:axisHome?"home_axis":cmd,...(axisHome?{axis:cmd.slice(5)}:{}),...(text?{text}:{})});
-      message.textContent="Komento välitetty LinuxCNC:lle. Toteutuminen näkyy tilatiedoissa.";
-      if(cmd==="mdi"){entry(text+" — välitetty");document.getElementById("mdi-input").value="";}
+      message.textContent="Command submitted to LinuxCNC. Follow the status to confirm the result.";
+      if(cmd==="mdi"){entry(text+" — submitted");document.getElementById("mdi-input").value="";}
     }catch(error){
       message.textContent=error.message;
       if(cmd==="mdi")entry(text+" — "+error.message);

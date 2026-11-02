@@ -1,78 +1,78 @@
 <!doctype html>
-<html lang="fi">
+<html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Foamomatic · Koneen tila</title>
-<link rel="stylesheet" href="/assets/status.css?v=9">
-<script type="module" src="/assets/status.js?v=9"></script>
+<title>Foamomatic · Machine status</title>
+<link rel="stylesheet" href="/assets/status.css?v=10">
+<script type="module" src="/assets/status.js?v=10"></script>
 </head>
 <body>
 <header class="app-header">
-<div class="header-top"><span class="brand">FOAMOMATIC<span>XY / UV</span></span><div class="connection-controls"><span id="connection" class="badge" role="status" aria-live="polite">Ei yhteyttä</span><button id="connection-toggle" class="secondary" type="button" aria-haspopup="dialog">Yhdistä</button></div></div>
-<div class="safety-buttons" aria-label="Koneen ohjaus"><button id="machine-estop" class="danger emergency" type="button" disabled>HÄTÄSEIS</button><button id="machine-reset" class="secondary" type="button" disabled>Kuittaa hätäseis</button><button id="machine-on" type="button" disabled>Käyttölupa päälle</button><button id="machine-off" class="secondary" type="button" disabled>Käyttölupa pois</button><button id="machine-abort" class="danger-outline" type="button" disabled>Keskeytä</button></div>
-<div class="header-messages"><p id="notice">Yhdistä nähdäksesi koneen tilan.</p><p id="control-message" role="status"></p></div>
+<div class="header-top"><span class="brand">FOAMOMATIC<span>XY / UV</span></span><div class="connection-controls"><span id="connection" class="badge" role="status" aria-live="polite">Disconnected</span><button id="connection-toggle" class="secondary" type="button" aria-haspopup="dialog">Connect</button></div></div>
+<div class="safety-buttons" aria-label="Machine controls"><button id="machine-estop" class="danger emergency" type="button" disabled>E-STOP</button><button id="machine-reset" class="secondary" type="button" disabled>Reset E-stop</button><button id="machine-on" type="button" disabled>Machine On</button><button id="machine-off" class="secondary" type="button" disabled>Machine Off</button><button id="machine-abort" class="danger-outline" type="button" disabled>Abort</button></div>
+<div class="header-messages"><p id="notice">Connect to view machine status.</p><p id="control-message" role="status"></p></div>
 </header>
 <dialog id="connection-dialog" class="connection-dialog" aria-labelledby="connection-title">
-<form id="login"><h2 id="connection-title">Yhdistä koneeseen</h2>
-<label for="token">Yhteysavain</label><input id="token" type="password" autocomplete="off" required aria-describedby="token-note" placeholder="Palvelimen FOAM_TOKEN">
-<p id="token-note" class="muted small">Avainta ei tallenneta selaimeen. Yhteys mahdollistaa koneen ohjauksen.</p><p id="login-feedback" role="status"></p>
-<div class="dialog-actions"><button id="login-cancel" type="button" class="secondary">Peruuta</button><button id="connect" type="submit">Yhdistä</button></div></form>
+<form id="login"><h2 id="connection-title">Connect to machine</h2>
+<label for="token">Connection token</label><input id="token" type="password" autocomplete="off" required aria-describedby="token-note" placeholder="Server FOAM_TOKEN">
+<p id="token-note" class="muted small">The token is not saved in your browser. Connecting enables machine control.</p><p id="login-feedback" role="status"></p>
+<div class="dialog-actions"><button id="login-cancel" type="button" class="secondary">Cancel</button><button id="connect" type="submit">Connect</button></div></form>
 </dialog>
 <main>
-<h1 class="sr-only">Foamomatic · Koneen ohjaus</h1>
-<nav class="tabs" role="tablist" aria-label="Koneen näkymät">
-<button id="tab-status" role="tab" aria-selected="true" aria-controls="panel-status" type="button">Koneen tila</button>
-<button id="tab-preview" role="tab" aria-selected="false" aria-controls="panel-preview" tabindex="-1" type="button">Rata ja esikatselu</button>
+<h1 class="sr-only">Foamomatic · Machine controls</h1>
+<nav class="tabs" role="tablist" aria-label="Machine views">
+<button id="tab-status" role="tab" aria-selected="true" aria-controls="panel-status" type="button">Machine status</button>
+<button id="tab-preview" role="tab" aria-selected="false" aria-controls="panel-preview" tabindex="-1" type="button">Toolpath and preview</button>
 <button id="tab-mdi" role="tab" aria-selected="false" aria-controls="panel-mdi" tabindex="-1" type="button">MDI</button>
 </nav>
 <section id="panel-preview" role="tabpanel" aria-labelledby="tab-preview" hidden>
-<section class="wire-panel" aria-label="XYUV-langan visualisointi">
-<div class="panel-heading"><div><h2>Lanka ja havaitut liikeradat</h2><p id="wire-size" class="muted small">1000 mm · nimellinen leveys</p></div><div class="view-actions"><button id="reset-view" class="secondary" type="button">Palauta näkymä</button><button id="clear-trail" class="secondary" type="button">Tyhjennä rata</button></div></div>
+<section class="wire-panel" aria-label="XYUV wire visualization">
+<div class="panel-heading"><div><h2>Wire and observed toolpaths</h2><p id="wire-size" class="muted small">1000 mm · nominal width</p></div><div class="view-actions"><button id="reset-view" class="secondary" type="button">Reset view</button><button id="clear-trail" class="secondary" type="button">Clear trail</button></div></div>
 <div class="preview-sidebar">
 <form id="preview-form" class="preview-form"><fieldset id="preview-operations">
-<label for="preview-file">G-koodin esikatselu</label>
-<div class="login-row"><input id="preview-file" type="file" accept=".ngc,.nc,.tap,.gcode,.txt"><button id="preview-load" type="submit">Näytä esikatselu</button><button id="preview-clear" type="button" class="secondary">Poista esikatselu</button></div>
-<p id="preview-message" class="muted small" role="status">G0/G1 · enintään 256 KiB. Esikatselu ei käynnistä konetta.</p>
-<label for="preview-step">Ohjelman tarkastelukohta <span id="preview-line">Ei esikatselua</span></label><input id="preview-step" type="range" min="0" max="0" value="0" disabled></fieldset>
+<label for="preview-file">G-code preview</label>
+<div class="login-row"><input id="preview-file" type="file" accept=".ngc,.nc,.tap,.gcode,.txt"><button id="preview-load" type="submit">Preview</button><button id="preview-clear" type="button" class="secondary">Clear preview</button></div>
+<p id="preview-message" class="muted small" role="status">G0/G1 · up to 256 KiB. Preview does not start the machine.</p>
+<label for="preview-step">Preview position <span id="preview-line">No preview</span></label><input id="preview-step" type="range" min="0" max="0" value="0" disabled></fieldset>
 </form>
 </div>
-<canvas id="wire-view" aria-label="Käännettävä XYUV-näkymä, lankapäät ja niiden välinen suora lanka"></canvas>
-<section class="program-controls" aria-label="Esikatsellun ohjelman ajo">
-<p id="program-selection">Esikatsele tiedosto ensin.</p>
-<div class="view-actions"><button id="program-run" type="button" disabled>Aja ohjelma</button><button id="program-pause" class="secondary" type="button" disabled>Tauko</button><button id="program-resume" type="button" disabled>Jatka</button><button id="program-stop" class="danger-outline" type="button" disabled>Keskeytä ajo</button></div>
-<p id="program-message" class="small" role="status">Ajo suorittaa esikatsellun ohjelman koneella, myös sen M-komennot.</p>
-<p id="program-progress" class="muted small" role="status">Ei tuoretta ajotietoa.</p>
-<details class="compact-help"><summary>Ajon toiminta</summary><p>Ohjelma suoritetaan paikallisesti LinuxCNC:ssä. Selainyhteyden katkeaminen ei pysäytä ajoa. Aloituspaikan tai koordinaatiston muuttamisen jälkeen tarvitaan uusi esikatselu.</p></details>
+<canvas id="wire-view" aria-label="Rotatable XYUV view with wire endpoints and a straight wire"></canvas>
+<section class="program-controls" aria-label="Run the previewed program">
+<p id="program-selection">Preview a file first.</p>
+<div class="view-actions"><button id="program-run" type="button" disabled>Run program</button><button id="program-pause" class="secondary" type="button" disabled>Pause</button><button id="program-resume" type="button" disabled>Resume</button><button id="program-stop" class="danger-outline" type="button" disabled>Abort run</button></div>
+<p id="program-message" class="small" role="status">Run executes the previewed program on the machine, including its M codes.</p>
+<p id="program-progress" class="muted small" role="status">No fresh execution status.</p>
+<details class="compact-help"><summary>About program execution</summary><p>LinuxCNC runs the program locally. Losing the browser connection does not stop execution. Preview again after changing the starting position or coordinate system.</p></details>
 </section>
-<div class="wire-caption"><p id="wire-note" class="small muted">Odotetaan tuoretta tilatietoa.</p><details class="compact-help"><summary>Käännä vetämällä · Tietoa visualisoinnista</summary><p>Rata kertyy vain tämän selainistunnon aikana. Pinta kuvaa näytteistettyä liikettä; lämmitystä ei huomioida. Näyttöalueen alaraja on nimellinen 0 mm.</p></details></div>
+<div class="wire-caption"><p id="wire-note" class="small muted">Waiting for fresh status.</p><details class="compact-help"><summary>Drag to rotate · About this view</summary><p>The trail records this browser session only. The surface shows sampled movement; heating is not modeled. The nominal display minimum is 0 mm.</p></details></div>
 </section>
 </section>
 <section id="panel-status" role="tabpanel" aria-labelledby="tab-status">
-<section class="homing-panel" aria-label="Kotiajo">
-<div class="view-actions"><button id="manual-mode" class="secondary" type="button" disabled>Valitse käsiajo</button><button id="home-all" type="button" disabled>Kotiaja kaikki</button><button id="home-X" class="secondary" type="button" disabled>Kotiaja X</button><button id="home-Y" class="secondary" type="button" disabled>Kotiaja Y</button><button id="home-U" class="secondary" type="button" disabled>Kotiaja U</button><button id="home-V" class="secondary" type="button" disabled>Kotiaja V</button></div>
-<p id="homing-help" class="muted small" role="status">Odotetaan koneen tilaa.</p>
+<section class="homing-panel" aria-label="Homing">
+<div class="view-actions"><button id="manual-mode" class="secondary" type="button" disabled>Select Manual</button><button id="home-all" type="button" disabled>Home all</button><button id="home-X" class="secondary" type="button" disabled>Home X</button><button id="home-Y" class="secondary" type="button" disabled>Home Y</button><button id="home-U" class="secondary" type="button" disabled>Home U</button><button id="home-V" class="secondary" type="button" disabled>Home V</button></div>
+<p id="homing-help" class="muted small" role="status">Waiting for machine status.</p>
 </section>
-<section class="coordinates" aria-label="Akseleiden koordinaatit">
-<article><div class="panel-heading"><h2>Vasen puoli</h2><span>XY</span></div><div class="table-wrap"><table><thead><tr><th>Akseli</th><th>Kone</th><th>Työ</th><th>Kotiajo</th></tr></thead><tbody id="left"></tbody></table></div></article>
-<article><div class="panel-heading"><h2>Oikea puoli</h2><span>UV</span></div><div class="table-wrap"><table><thead><tr><th>Akseli</th><th>Kone</th><th>Työ</th><th>Kotiajo</th></tr></thead><tbody id="right"></tbody></table></div></article>
+<section class="coordinates" aria-label="Axis coordinates">
+<article><div class="panel-heading"><h2>Left side</h2><span>XY</span></div><div class="table-wrap"><table><thead><tr><th>Axis</th><th>Machine</th><th>Work</th><th>Homing</th></tr></thead><tbody id="left"></tbody></table></div></article>
+<article><div class="panel-heading"><h2>Right side</h2><span>UV</span></div><div class="table-wrap"><table><thead><tr><th>Axis</th><th>Machine</th><th>Work</th><th>Homing</th></tr></thead><tbody id="right"></tbody></table></div></article>
 </section>
-<p class="muted small" style="margin:6px 0">Koordinaatit koneen määrittämissä pituusyksiköissä.</p>
-<section class="facts" aria-label="Koneen tila">
-<div><span>Hätäseis</span><strong id="estop">—</strong></div>
-<div><span>Koneen käyttölupa</span><strong id="enabled">—</strong></div>
-<div><span>Toimintatila</span><strong id="mode">—</strong></div>
-<div><span>Ohjelman tila</span><strong id="program">—</strong></div>
+<p class="muted small" style="margin:6px 0">Coordinates use the units configured in LinuxCNC.</p>
+<section class="facts" aria-label="Machine status">
+<div><span>E-stop</span><strong id="estop">—</strong></div>
+<div><span>Machine power</span><strong id="enabled">—</strong></div>
+<div><span>Task mode</span><strong id="mode">—</strong></div>
+<div><span>Program state</span><strong id="program">—</strong></div>
 </section>
-<section class="details"><div><span class="muted">Ohjelmatiedosto</span><p id="file">—</p></div><div><span class="muted">Ohjelmarivi</span><p id="line">—</p></div></section>
+<section class="details"><div><span class="muted">Program file</span><p id="file">—</p></div><div><span class="muted">Program line</span><p id="line">—</p></div></section>
 </section>
 <section id="panel-mdi" role="tabpanel" aria-labelledby="tab-mdi" hidden>
-<article class="mdi-panel"><div class="panel-heading"><div><h2>G-koodin käsinsyöttö</h2><p class="muted small">Yksi komento kerrallaan · enintään 254 ASCII-merkkiä</p></div><div class="view-actions"><button id="mdi-mode" type="button" disabled>Valitse MDI-tila</button></div></div>
+<article class="mdi-panel"><div class="panel-heading"><div><h2>Manual G-code input</h2><p class="muted small">One command at a time · up to 254 ASCII characters</p></div><div class="view-actions"><button id="mdi-mode" type="button" disabled>Select MDI mode</button></div></div>
 <form id="mdi-form">
-<label for="mdi-input">MDI-komento</label>
-<div class="login-row"><input id="mdi-input" type="text" maxlength="254" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Esimerkiksi G90" disabled><button id="mdi-send" type="submit" disabled>Lähetä komento</button></div>
+<label for="mdi-input">MDI command</label>
+<div class="login-row"><input id="mdi-input" type="text" maxlength="254" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="For example, G90" disabled><button id="mdi-send" type="submit" disabled>Send command</button></div>
 <details id="mdi-keyboard" class="mdi-keyboard" open>
-<summary>Kosketusnäppäimistö</summary>
-<fieldset id="mdi-keyboard-keys" disabled aria-label="MDI-kosketusnäppäimistö">
+<summary>Touch keyboard</summary>
+<fieldset id="mdi-keyboard-keys" disabled aria-label="MDI touch keyboard">
 <div class="mdi-key-grid mdi-letter-keys">
 <button type="button" data-mdi-key="G" class="secondary">G</button>
 <button type="button" data-mdi-key="M" class="secondary">M</button>
@@ -93,24 +93,24 @@
 <button type="button" data-mdi-key="1" class="secondary">1</button>
 <button type="button" data-mdi-key="2" class="secondary">2</button>
 <button type="button" data-mdi-key="3" class="secondary">3</button>
-<button type="button" data-mdi-key="-" class="secondary" aria-label="Miinus">-</button>
+<button type="button" data-mdi-key="-" class="secondary" aria-label="Minus">-</button>
 <button type="button" data-mdi-key="0" class="secondary">0</button>
-<button type="button" data-mdi-key="." class="secondary" aria-label="Desimaalipiste">.</button>
+<button type="button" data-mdi-key="." class="secondary" aria-label="Decimal point">.</button>
 </div>
 <div class="mdi-key-actions">
-<button type="button" data-mdi-key=" " class="secondary">Välilyönti</button>
-<button type="button" data-mdi-action="backspace" class="secondary" aria-label="Poista edellinen merkki tai valittu teksti">⌫ Poista</button>
-<button type="button" data-mdi-action="clear" class="secondary">Tyhjennä rivi</button>
-<button type="button" data-mdi-action="enter">Enter · Lähetä</button>
+<button type="button" data-mdi-key=" " class="secondary">Space</button>
+<button type="button" data-mdi-action="backspace" class="secondary" aria-label="Delete the previous character or selected text">⌫ Delete</button>
+<button type="button" data-mdi-action="clear" class="secondary">Clear line</button>
+<button type="button" data-mdi-action="enter">Enter · Send</button>
 </div>
 </fieldset>
 </details>
-<p id="mdi-help" class="muted small" role="status">Odotetaan koneen tilaa.</p>
-<details class="compact-help"><summary>MDI-komentojen toiminta</summary><p>Komento suoritetaan oikealla koneella. Lähetyskuittaus tarkoittaa välitystä, ei liikkeen valmistumista. Yhteyskatko ei automaattisesti keskeytä jo alkanutta MDI-liikettä.</p></details>
+<p id="mdi-help" class="muted small" role="status">Waiting for machine status.</p>
+<details class="compact-help"><summary>About MDI commands</summary><p>Commands execute on the real machine. An acknowledgement confirms submission, not motion completion. Losing the connection does not automatically stop an active MDI move.</p></details>
 </form>
-<div class="mdi-history"><div class="panel-heading"><h2>Tämän istunnon lähetykset</h2><button id="mdi-clear-history" class="secondary" type="button">Tyhjennä</button></div><ol id="mdi-history" aria-label="MDI-komentohistoria"></ol></div></article>
+<div class="mdi-history"><div class="panel-heading"><h2>Session submissions</h2><button id="mdi-clear-history" class="secondary" type="button">Clear</button></div><ol id="mdi-history" aria-label="MDI command history"></ol></div></article>
 </section>
 <p id="error" class="error" role="alert" hidden></p>
-<footer><span title="Verkkopainike ei korvaa koneen fyysistä hätäseispiiriä.">XYUV · LinuxCNC · Ohjelmallinen ohjaus</span><span id="updated">Ei tilapäivityksiä</span></footer>
+<footer><span title="The network button does not replace the physical E-stop circuit.">XYUV · LinuxCNC · Software controls</span><span id="updated">No status updates</span></footer>
 </main>
 </body></html>

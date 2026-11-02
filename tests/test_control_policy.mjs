@@ -11,10 +11,10 @@ assert.equal(permissions(null,false,true).estop,true);
 assert.equal(permissions(null,false,false).estop,false);
 console.log("Control policy checks passed");
 
-assert.match(mdiStatus({...state,homed:[1,1,0,0]},true,true),/Kotiajamatta: U, V/);
-assert.match(mdiStatus(state,true,true),/MDI-tila on käytössä/);
-assert.match(mdiStatus({...state,interp_state:2,task_mode:1},true,true),/suorittaa/);
-assert.match(mdiStatus({...state,estop:true},true,true),/hätäseis/);
+assert.match(mdiStatus({...state,homed:[1,1,0,0]},true,true),/Not homed: U, V/);
+assert.match(mdiStatus(state,true,true),/MDI mode is active/);
+assert.match(mdiStatus({...state,interp_state:2,task_mode:1},true,true),/running/);
+assert.match(mdiStatus({...state,estop:true},true,true),/E-stop/);
 
 assert.equal(permissions({...state,task_mode:1},true,true).home_axis,true);
 assert.equal(permissions({...state,task_mode:1,homing:[false,true,false,false]},true,true).home_axis,false);

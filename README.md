@@ -333,3 +333,10 @@ A 390x844 phone viewport was checked for horizontal overflow and header access.
 
 Only the Docker frontend needs rebuilding for this layout update; the host
 adapter/systemd service does not need restarting.
+
+
+## Language
+
+English is the project language for the interface, status messages, accessibility
+labels, documentation, and tests. Messages forwarded directly from LinuxCNC retain
+the language configured on the host.

@@ -15,16 +15,16 @@ export function permissions(state, fresh, connected) {
 }
 
 export function mdiStatus(state, fresh, connected) {
-  if(!connected)return "Ei yhteyttä palvelimeen.";
-  if(!fresh||!state)return "Odotetaan tuoretta koneen tilaa.";
-  if(state.estop!==false)return "Kuittaa hätäseis ennen MDI:tä.";
-  if(state.enabled!==true)return "Kytke koneen käyttölupa päälle.";
-  if(state.homing?.some(Boolean))return "Kotiajo on käynnissä. Odota sen valmistumista.";
+  if(!connected)return "Not connected to the server.";
+  if(!fresh||!state)return "Waiting for fresh machine status.";
+  if(state.estop!==false)return "Reset E-stop before using MDI.";
+  if(state.enabled!==true)return "Turn Machine On before using MDI.";
+  if(state.homing?.some(Boolean))return "Homing is in progress. Wait for it to finish.";
   const letters=["X","Y","U","V"];
   const missing=letters.filter((_,i)=>state.homed?.[i]!==1&&state.homed?.[i]!==true);
-  if(missing.length)return "Kotiajamatta: "+missing.join(", ")+". Kotiaja nämä akselit LinuxCNC:ssä.";
-  if(state.mdi_pending)return "Odotetaan edellisen MDI-komennon kuittausta tai valmistumista.";
-  if(state.interp_state!==1||state.paused)return "Kone suorittaa komentoa tai on tauolla. Keskeytä tarvittaessa.";
-  if(state.task_mode!==3)return "Valitse MDI-tila ja odota tilan vahvistusta.";
-  return "MDI-tila on käytössä. Voit lähettää yhden komentorivin.";
+  if(missing.length)return "Not homed: "+missing.join(", ")+". Home these axes in LinuxCNC.";
+  if(state.mdi_pending)return "Waiting for the previous MDI command to be acknowledged or completed.";
+  if(state.interp_state!==1||state.paused)return "The machine is running a command or paused. Abort if needed.";
+  if(state.task_mode!==3)return "Select MDI mode and wait for confirmation.";
+  return "MDI mode is active. You can submit one command line.";
 }

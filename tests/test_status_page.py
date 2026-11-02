@@ -15,7 +15,7 @@ class StatusPageTests(unittest.TestCase):
             with patch.object(gateway, "rpc", rpc), TestClient(gateway.app) as client:
                 page = client.get("/")
                 self.assertEqual(page.status_code, 200)
-                self.assertIn("Koneen tila", page.text)
+                self.assertIn("Machine status", page.text)
                 for asset in ("status.js", "status.css"):
                     self.assertEqual(client.get("/assets/" + asset).status_code, 200)
                 with client.websocket_connect("/ws", headers={"origin": "http://testserver"}) as ws:

@@ -18,22 +18,22 @@ export function createProgramControls(send){
     pause.disabled=busy||!active||!available()||state?.paused||state?.interp_state===1;
     resume.disabled=busy||!active||!available()||!state?.paused;
     stop.disabled=!connected;
-    document.getElementById("program-selection").textContent=p?p.name:"Esikatsele tiedosto ensin.";
-    progress.textContent=!fresh?"Ei tuoretta ajotietoa.":active?
-      (state.paused?"Tauolla":state.interp_state===1?"Vapaa / ohjelma päättynyt":"Ohjelma käynnissä")+" · rivi "+(state.source_line??state.line):
-      "Ei tämän esikatselun ohjelmaa ajossa.";
+    document.getElementById("program-selection").textContent=p?p.name:"Preview a file first.";
+    progress.textContent=!fresh?"No fresh execution status.":active?
+      (state.paused?"Paused":state.interp_state===1?"Idle / program finished":"Program running")+" · line "+(state.source_line??state.line):
+      "This previewed program is not running.";
   }
   function nextStatus(predicate){
     const sample=state?.sample_monotonic;
     return new Promise((resolve,reject)=>{
       const item={predicate:next=>next.sample_monotonic!==sample&&predicate(next),resolve,reject};
       item.timer=setTimeout(()=>{
-        waiters=waiters.filter(v=>v!==item);reject(new Error("Valmistelun kuittaus puuttuu; ajoa ei jatketa automaattisesti."));
+        waiters=waiters.filter(v=>v!==item);reject(new Error("No preparation acknowledgement received; execution will not proceed automatically."));
       },5000);waiters.push(item);
     });
   }
   function cancelWaits(){
-    for(const item of waiters){clearTimeout(item.timer);item.reject(new Error("Ajon valmistelu keskeytyi."));}
+    for(const item of waiters){clearTimeout(item.timer);item.reject(new Error("Run preparation was cancelled."));}
     waiters=[];
   }
   onProgram(()=>{cancelPreparation();cancelWaits();render();});
@@ -41,28 +41,28 @@ export function createProgramControls(send){
   run.addEventListener("click",async()=>{
     if(run.disabled)return;
     const p=getProgram(),generation=preparationGeneration();
-    const check=()=>{if(generation!==preparationGeneration()||getProgram()?.id!==p.id||!connected||!fresh)throw new Error("Ajon valmistelu keskeytyi.");};
+    const check=()=>{if(generation!==preparationGeneration()||getProgram()?.id!==p.id||!connected||!fresh)throw new Error("Run preparation was cancelled.");};
     busy=true;render();
     try{
-      message.textContent="Valitaan AUTO-tila…";
+      message.textContent="Selecting AUTO mode…";
       const mode=await send({cmd:"program_prepare",program_id:p.id});
       check();
       await nextStatus(s=>s.task_mode===2&&s.echo_serial_number>=mode.serial);
-      check();message.textContent="Avataan esikatseltu tiedosto…";
+      check();message.textContent="Opening previewed program…";
       const opened=await send({cmd:"program_open",program_id:p.id});
       check();
       await nextStatus(s=>s.loaded_program_id===p.id&&s.echo_serial_number>=opened.serial);
-      check();message.textContent="Lähetetään käynnistyspyyntö…";
+      check();message.textContent="Submitting start request…";
       consumed=p.id;
       await send({cmd:"program_run",program_id:p.id});
-      message.textContent="Käynnistyspyyntö välitetty. M0 pysäyttää ohjelman odottamaan Jatka-painiketta.";
+      message.textContent="Start request submitted. M0 pauses the program until you press Resume.";
     }catch(error){message.textContent=error.message;}
     finally{busy=false;render();}
   });
   async function command(cmd){
     if(busy)return;
     busy=true;render();
-    try{await send({cmd,program_id:getProgram()?.id});message.textContent="Komento välitetty. Seuraa ajon tilaa.";}
+    try{await send({cmd,program_id:getProgram()?.id});message.textContent="Command submitted. Follow the execution status.";}
     catch(error){message.textContent=error.message;}
     finally{busy=false;render();}
   }
@@ -70,7 +70,7 @@ export function createProgramControls(send){
   resume.addEventListener("click",()=>{if(!resume.disabled)command("program_resume");});
   stop.addEventListener("click",async()=>{
     cancelPreparation();cancelWaits();
-    try{await send({cmd:"abort"});message.textContent="Keskeytyspyyntö välitetty.";}
+    try{await send({cmd:"abort"});message.textContent="Abort request submitted.";}
     catch(error){message.textContent=error.message;}
   });
   render();

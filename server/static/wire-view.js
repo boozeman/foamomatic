@@ -14,13 +14,13 @@ slider.addEventListener("input", () => {
 function updatePreviewLabel() {
   const segment=preview[previewStep];
   document.getElementById("preview-line").textContent=segment
-    ? "Rivi "+segment.line+" · "+(previewStep+1)+"/"+preview.length : "Ei esikatselua";
+    ? "Line "+segment.line+" · "+(previewStep+1)+"/"+preview.length : "No preview";
 }
 export function setPreview(segments) {
   if(!Array.isArray(segments) || segments.length>12000 ||
       !segments.every(s=>["rapid","feed"].includes(s.kind) &&
         [s.start,s.end].every(p=>Array.isArray(p)&&p.length===4&&p.every(Number.isFinite)))) {
-    throw new Error("Virheelliset esikatselukoordinaatit.");
+    throw new Error("Invalid preview coordinates.");
   }
   preview=segments;previewStep=Math.max(0,segments.length-1);
   slider.max=String(previewStep);slider.value=String(previewStep);
@@ -77,7 +77,7 @@ function draw() {
   }
   ctx.font="12px system-ui";
   ctx.fillStyle="#94afa5";
-  for(const [text,p] of [["Vasen XY",[0,0,zmax]],["Oikea UV",[0,span,zmax]]]){
+  for(const [text,p] of [["Left XY",[0,0,zmax]],["Right UV",[0,span,zmax]]]){
     const v=at(p);ctx.fillText(text,v[0]+6,v[1]-10);
   }
   if(position&&live){
@@ -104,7 +104,7 @@ document.getElementById("reset-view").addEventListener("click",()=>{yaw=-.65;pit
 export function configureWire(value){
   if(!value || !["width_mm","horizontal_max_mm","vertical_max_mm"].every(k=>Number.isFinite(value[k])&&value[k]>0))return;
   config=value;trails=[];last=null;draw();
-  document.getElementById("wire-size").textContent=value.width_mm+" mm · nimellinen leveys";
+  document.getElementById("wire-size").textContent=value.width_mm+" mm · nominal width";
 }
 export function updateWire(data){
   const p=data.machine;
@@ -121,10 +121,10 @@ export function updateWire(data){
   gap=false;previous=signature;lastTime=now;
   position={...p};live=true;
   const outside=p.X<0||p.U<0||p.Y<0||p.V<0||p.X>config.horizontal_max_mm||p.U>config.horizontal_max_mm||p.Y>config.vertical_max_mm||p.V>config.vertical_max_mm;
-  note.textContent=outside?"Lankapää on nimellisen näyttöalueen ulkopuolella.":"Vihreä: XY · Keltainen: UV · Vaalea: lanka";
+  note.textContent=outside?"A wire endpoint is outside the nominal display area.":"Green: XY · Yellow: UV · White: wire";
   draw();
 }
 export function unavailableWire(){
-  live=false;gap=true;last=null;note.textContent="Nykyinen lanka piilotettu: ei tuoretta tilatietoa.";draw();
+  live=false;gap=true;last=null;note.textContent="Live wire hidden: no fresh status.";draw();
 }
 draw();

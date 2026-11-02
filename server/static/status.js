@@ -13,12 +13,12 @@ const pending=new Map();
 const controls=createControls(sendCommand);
 const programs=createProgramControls(sendCommand);
 function sendCommand(payload) {
-  if(!ready||socket?.readyState!==WebSocket.OPEN) return Promise.reject(new Error("Ei yhteyttä."));
+  if(!ready||socket?.readyState!==WebSocket.OPEN) return Promise.reject(new Error("Disconnected."));
   const id=String(++sequence);
   return new Promise((resolve,reject)=>{
     const timer=setTimeout(()=>{
       pending.delete(id);
-      reject(new Error("Kuittaus puuttuu. Komentoa ei uusita; tarkista koneen tila."));
+      reject(new Error("No acknowledgement received. The command will not be retried; check the machine state."));
     },2000);
     pending.set(id,{resolve,reject,timer});
     socket.send(JSON.stringify({...payload,id,command_token:commandToken}));
@@ -27,7 +27,7 @@ function sendCommand(payload) {
 }
 const connectionDialog=byId("connection-dialog");
 function syncConnectionButton(){
-  byId("connection-toggle").textContent=ready?"Katkaise":socket?"Peruuta":"Yhdistä";
+  byId("connection-toggle").textContent=ready?"Disconnect":socket?"Cancel":"Connect";
 }
 function cancelConnectionDialog(){
   connectionDialog.close();
@@ -70,7 +70,7 @@ function clearValues() {
 function invalid(message) {
   clearValues();
   document.body.classList.add("stale");
-  connection("Tilatieto puuttuu", "warn");
+  connection("Status unavailable", "warn");
   byId("notice").textContent = message;
 }
 const format = value => typeof value === "number" && Number.isFinite(value)
@@ -79,11 +79,11 @@ function show(data) {
   if (!data || !letters.every(a => typeof data.machine?.[a] === "number" &&
       Number.isFinite(data.machine[a]) && typeof data.work?.[a] === "number" &&
       Number.isFinite(data.work[a])) || !Array.isArray(data.homed)) {
-    invalid("Palvelimen tilatieto on puutteellinen."); return;
+    invalid("Server status data is incomplete."); return;
   }
   // Detect frozen/replayed adapter samples, not merely an open WebSocket.
   if (typeof data.sample_monotonic !== "number" || !Number.isFinite(data.sample_monotonic)) {
-    invalid("Tilatiedon aikaleima puuttuu."); return;
+    invalid("Status timestamp is missing."); return;
   }
   if (data.sample_monotonic === lastSample) return;
   lastSample = data.sample_monotonic;
@@ -93,41 +93,41 @@ function show(data) {
   controls.update(data,true,ready);
   programs.update(data,true,ready);
   document.body.classList.remove("stale");
-  connection("Yhteys kunnossa", "live");
-  byId("notice").textContent = "LinuxCNC:n tilatiedot päivittyvät.";
+  connection("Connected", "live");
+  byId("notice").textContent = "Receiving LinuxCNC status.";
   letters.forEach((a, i) => {
     rows[a][1].textContent = format(data.machine[a]);
     rows[a][2].textContent = format(data.work[a]);
-    rows[a][3].textContent = data.homed[i] === 1 || data.homed[i] === true ? "Kotiajettu" :
-      data.homed[i] === 0 || data.homed[i] === false ? "Ei kotiajettu" : "—";
+    rows[a][3].textContent = data.homed[i] === 1 || data.homed[i] === true ? "Homed" :
+      data.homed[i] === 0 || data.homed[i] === false ? "Not homed" : "—";
   });
   const booleanText = (v, yes, no) => v === true ? yes : v === false ? no : "—";
-  byId("estop").textContent = booleanText(data.estop, "Aktiivinen", "Ei aktiivinen");
-  byId("enabled").textContent = booleanText(data.enabled, "Päällä", "Pois päältä");
-  byId("mode").textContent = ({1:"Käsiajo",2:"Automaatti",3:"MDI"})[data.task_mode] ?? "Tuntematon";
-  byId("program").textContent = data.paused ? "Tauolla" :
-    ({1:"Valmis",2:"Luetaan",3:"Odottaa",4:"Odottaa liikettä"})[data.interp_state] ?? "Tuntematon";
-  byId("file").textContent = data.file || "Ei ohjelmaa";
+  byId("estop").textContent = booleanText(data.estop, "Active", "Inactive");
+  byId("enabled").textContent = booleanText(data.enabled, "On", "Off");
+  byId("mode").textContent = ({1:"Manual",2:"Auto",3:"MDI"})[data.task_mode] ?? "Unknown";
+  byId("program").textContent = data.paused ? "Paused" :
+    ({1:"Idle",2:"Reading",3:"Waiting",4:"Waiting for motion"})[data.interp_state] ?? "Unknown";
+  byId("file").textContent = data.file || "No program";
   byId("line").textContent = Number.isInteger(data.line) ? String(data.line) : "—";
   byId("error").hidden = !data.error;
-  byId("error").textContent = data.error ? "LinuxCNC: " + (data.error.message ?? "Tuntematon virhe") : "";
+  byId("error").textContent = data.error ? "LinuxCNC: " + (data.error.message ?? "Unknown error") : "";
 }
 function disconnect() {
   setToken("");
   commandToken=null;
   for(const request of pending.values()){
-    clearTimeout(request.timer);request.reject(new Error("Yhteys katkesi; komentoa ei uusita."));
+    clearTimeout(request.timer);request.reject(new Error("Connection lost; the command will not be retried."));
   }
   pending.clear();
   const old = socket;
   socket = null; ready = false;
   if (old) old.close();
   clearValues();
-  connection("Ei yhteyttä");
-  byId("notice").textContent = "Yhteys katkaistu.";
+  connection("Disconnected");
+  byId("notice").textContent = "Disconnected.";
   byId("connect").disabled = false;
   syncConnectionButton();
-  byId("updated").textContent = "Ei tilapäivityksiä";
+  byId("updated").textContent = "No status updates";
 }
 
 byId("login").addEventListener("submit", event => {
@@ -136,10 +136,10 @@ byId("login").addEventListener("submit", event => {
   if (!token || socket) return;
   const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
   socket = ws; ready = false; lastUpdate = 0; lastSample = null; connectedAt = Date.now();
-  clearValues(); connection("Yhdistetään…");
-  byId("notice").textContent = "Odotetaan palvelimen vahvistusta.";
+  clearValues(); connection("Connecting…");
+  byId("notice").textContent = "Waiting for server confirmation.";
   byId("connect").disabled = true;
-  byId("login-feedback").textContent="Yhdistetään…";
+  byId("login-feedback").textContent="Connecting…";
   syncConnectionButton();
   ws.addEventListener("open", () => {
     if (socket !== ws) return;
@@ -150,39 +150,39 @@ byId("login").addEventListener("submit", event => {
     if (socket !== ws) return;
     try {
       const msg = JSON.parse(event.data);
-      if (msg.type === "ready") { ready = true; syncConnectionButton(); connectionDialog.close(); setToken(token); configureWire(msg.geometry); connection("Odotetaan tilatietoa"); }
+      if (msg.type === "ready") { ready = true; syncConnectionButton(); connectionDialog.close(); setToken(token); configureWire(msg.geometry); connection("Waiting for status"); }
       if(msg.type==="ack"){
         const request=pending.get(msg.id);
         if(request){clearTimeout(request.timer);pending.delete(msg.id);
-          if(msg.ok)request.resolve(msg.data);else request.reject(new Error(msg.error||"Komento hylättiin."));
+          if(msg.ok)request.resolve(msg.data);else request.reject(new Error(msg.error||"Command rejected."));
         }
       }
       if (msg.type === "status" && ready) {
         commandToken=msg.command_token;
         if (msg.ok) show(msg.data);
-        else invalid(msg.error || "LinuxCNC:n tilatietoa ei saada.");
+        else invalid(msg.error || "LinuxCNC status is unavailable.");
       }
-    } catch { invalid("Palvelimen viestiä ei voitu lukea."); }
+    } catch { invalid("Could not read the server message."); }
   });
   ws.addEventListener("close", event => {
     if (socket !== ws) return;
     const authenticated = ready;
     disconnect();
     const reasons = {
-      "Invalid token": "Yhteysavain ei vastaa käynnissä olevan kontin FOAM_TOKEN-arvoa.",
-      "Origin not allowed": "Sivun osoite puuttuu palvelimen FOAM_ORIGINS-asetuksesta.",
-      "Invalid authentication message": "Tunnistautumisviesti oli virheellinen.",
-      "Connection timeout": "Palvelimen yhteysaikakatkaisu.",
-      "Internal server error": "Palvelimen sisäinen virhe. Tarkista kontin loki."
+      "Invalid token": "The token does not match FOAM_TOKEN in the running container.",
+      "Origin not allowed": "This page origin is missing from the server FOAM_ORIGINS setting.",
+      "Invalid authentication message": "Invalid authentication message.",
+      "Connection timeout": "Server connection timed out.",
+      "Internal server error": "Internal server error. Check the container log."
     };
     byId("notice").textContent = (reasons[event.reason] || (authenticated
-      ? "Yhteys katkesi. Yhdistä uudelleen nähdäksesi tuoreen tilan."
-      : "Yhteyttä ei hyväksytty. Tarkista yhteysavain ja FOAM_ORIGINS.")) +
+      ? "Connection lost. Reconnect to receive fresh status."
+      : "Connection rejected. Check the token and FOAM_ORIGINS.")) +
       " (WebSocket " + event.code + ")";
     byId("login-feedback").textContent=byId("notice").textContent;
   });
   ws.addEventListener("error", () => {
-    if (socket === ws) byId("notice").textContent = "Verkkoyhteys ei onnistu.";
+    if (socket === ws) byId("notice").textContent = "Network connection failed.";
   });
 });
 setInterval(() => {
@@ -193,10 +193,10 @@ setInterval(() => {
   }
   if (lastUpdate) {
     const age = (Date.now() - lastUpdate) / 1000;
-    byId("updated").textContent = "Viimeisin tilapäivitys " + age.toFixed(1) + " s sitten";
+    byId("updated").textContent = "Last status update " + age.toFixed(1) + " s ago";
     controls.update(latest,age<=1&&!!latest,ready);
     programs.update(latest,age<=1&&!!latest,ready);
-    if (age > 3 && latest) invalid("Tilatieto on vanhentunut. Odotetaan uutta päivitystä.");
+    if (age > 3 && latest) invalid("Status is stale. Waiting for a fresh update.");
   }
 }, 500);
 window.addEventListener("pagehide", disconnect);
