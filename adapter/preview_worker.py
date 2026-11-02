@@ -60,7 +60,7 @@ def parse(context):
                 indices = (0,1,6,7)
                 start = [round(self.lo[i]*25.4, 6) for i in indices]
                 end = [round(target[i]*25.4, 6) for i in indices]
-                self.segments.append({"start":start,"end":end,"kind":kind,"line":self.line})
+                self.segments.append({"start":start,"end":end,"kind":kind,"line":max(0,self.line-context.get("source_offset",0))})
             self.lo = target
         def straight_traverse(self,*args): self.move("rapid",args)
         def straight_feed(self,*args): self.move("feed",args)

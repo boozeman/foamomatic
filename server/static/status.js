@@ -1,3 +1,4 @@
+import {createProgramControls} from "./program-ui.js";
 import {createControls} from "./controls-ui.js";
 import "./tabs.js";
 import {setToken} from "./auth-state.mjs";
@@ -10,6 +11,7 @@ let latest = null;
 let commandToken=null, sequence=0;
 const pending=new Map();
 const controls=createControls(sendCommand);
+const programs=createProgramControls(sendCommand);
 function sendCommand(payload) {
   if(!ready||socket?.readyState!==WebSocket.OPEN) return Promise.reject(new Error("Ei yhteyttä."));
   const id=String(++sequence);
@@ -40,6 +42,7 @@ function clearValues() {
   unavailableWire();
   latest = null;
   controls.update(null,false,ready);
+  programs.update(null,false,ready);
   for (const axis of letters) for (const cell of rows[axis].slice(1)) cell.textContent = "—";
   for (const id of ["estop", "enabled", "mode", "program", "file", "line"]) byId(id).textContent = "—";
   byId("error").hidden = true;
@@ -68,6 +71,7 @@ function show(data) {
   latest = data;
   updateWire(data);
   controls.update(data,true,ready);
+  programs.update(data,true,ready);
   document.body.classList.remove("stale");
   connection("Yhteys kunnossa", "live");
   byId("notice").textContent = "LinuxCNC:n tilatiedot päivittyvät.";
@@ -168,6 +172,7 @@ setInterval(() => {
     const age = (Date.now() - lastUpdate) / 1000;
     byId("updated").textContent = "Viimeisin tilapäivitys " + age.toFixed(1) + " s sitten";
     controls.update(latest,age<=1&&!!latest,ready);
+    programs.update(latest,age<=1&&!!latest,ready);
     if (age > 3 && latest) invalid("Tilatieto on vanhentunut. Odotetaan uutta päivitystä.");
   }
 }, 500);

@@ -20,7 +20,7 @@ ALLOWED.discard("")
 log = logging.getLogger("uvicorn.error")
 SAFE_COMMANDS = {"stop", "abort", "estop", "release"}
 CONTROL_COMMANDS = {"reset_estop", "disable", "enable", "home_all", "manual",
-                    "jog", "world", "pause", "mdi_mode", "mdi", "home_axis"} | SAFE_COMMANDS
+                    "jog", "world", "pause", "mdi_mode", "mdi", "home_axis", "program_prepare", "program_open", "program_run", "program_pause", "program_resume"} | SAFE_COMMANDS
 
 async def rpc(message, *, timeout=0.5, limit=65536):
     reader, writer = await asyncio.wait_for(asyncio.open_unix_connection(SOCKET, limit=limit), 0.5)
@@ -153,7 +153,7 @@ async def websocket(ws: WebSocket):
                 if read_only:
                     await acknowledge(msg, {"ok": False, "error": "Read-only session"})
                     continue
-                if msg["cmd"] in {"enable", "reset_estop", "mdi_mode", "mdi", "manual", "home_all", "home_axis"}:
+                if msg["cmd"] in {"enable", "reset_estop", "mdi_mode", "mdi", "manual", "home_all", "home_axis", "program_prepare", "program_open", "program_run", "program_resume"}:
                     token = msg.get("command_token")
                     issued = command_tokens.pop(token, None) if isinstance(token, str) else None
                     if issued is None or time.monotonic() - issued > 1.0:
@@ -172,7 +172,7 @@ async def websocket(ws: WebSocket):
                     if not isinstance(proof, dict) or proof.get("challenge") != challenge:
                         await rpc({"cmd": "release", "session": session})
                         continue
-                payload = {k: msg[k] for k in ("cmd", "axis", "velocity", "text") if k in msg}
+                payload = {k: msg[k] for k in ("cmd", "axis", "velocity", "text", "program_id") if k in msg}
                 payload["session"] = session
                 try:
                     response = await rpc(payload)

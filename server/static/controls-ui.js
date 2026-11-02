@@ -1,3 +1,4 @@
+import {cancelPreparation} from "./program-state.mjs";
 import {createMdiKeyboard} from "./mdi-keyboard.js";
 import {permissions, mdiStatus} from "./control-policy.mjs";
 export function createControls(send) {
@@ -30,6 +31,7 @@ export function createControls(send) {
     if(!permissions(state,fresh,connected)[axisHome?"home_axis":cmd])return;
     const urgent=["estop","abort","disable"].includes(cmd);
     if(busy&&!urgent)return;
+    cancelPreparation();
     if(!urgent)busy=true;
     render();message.textContent="Lähetetään…";
     try{

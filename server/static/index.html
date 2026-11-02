@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Foamomatic · Koneen tila</title>
-<link rel="stylesheet" href="/assets/status.css?v=7">
-<script type="module" src="/assets/status.js?v=7"></script>
+<link rel="stylesheet" href="/assets/status.css?v=8">
+<script type="module" src="/assets/status.js?v=8"></script>
 </head>
 <body>
 <header><a class="brand" href="/">FOAMOMATIC<span>XY / UV</span></a><span class="tag">XYUV-OHJAUS</span></header>
@@ -35,6 +35,13 @@
 <p id="preview-message" class="muted small" role="status">Lataa G0/G1-ohjelma (enintään 256 KiB). Tiedostoa ei avata koneen ajo-ohjelmaksi. Lämmitystä ei mallinneta.</p>
 <label for="preview-step">Ohjelman tarkastelukohta <span id="preview-line">Ei esikatselua</span></label><input id="preview-step" type="range" min="0" max="0" value="0" disabled>
 </form>
+<section class="program-controls" aria-label="Esikatsellun ohjelman ajo">
+<p id="program-selection">Esikatsele tiedosto ensin.</p>
+<div class="view-actions"><button id="program-run" type="button" disabled>Aja ohjelma</button><button id="program-pause" class="secondary" type="button" disabled>Tauko</button><button id="program-resume" type="button" disabled>Jatka</button><button id="program-stop" class="danger-outline" type="button" disabled>Keskeytä ajo</button></div>
+<p id="program-message" class="small" role="status">Ajo suorittaa esikatsellun ohjelman koneella, myös sen M-komennot.</p>
+<p id="program-progress" class="muted small" role="status">Ei tuoretta ajotietoa.</p>
+<p class="muted small">Ohjelma suoritetaan paikallisesti LinuxCNC:ssä. Selainyhteyden katkeaminen ei pysäytä ajoa. Aloituspaikan tai koordinaatiston muuttamisen jälkeen tarvitaan uusi esikatselu.</p>
+</section>
 <canvas id="wire-view" aria-label="Käännettävä XYUV-näkymä, lankapäät ja niiden välinen suora lanka"></canvas>
 <div class="wire-caption"><p id="wire-note" class="small muted">Odotetaan tuoretta tilatietoa.</p><p class="small muted">Käännä vetämällä · Rata kertyy vain tämän selainistunnon aikana. Pinta kuvaa näytteistettyä liikettä; lämmitystä ei huomioida. Näyttöalueen alaraja on nimellinen 0 mm.</p></div>
 </section>

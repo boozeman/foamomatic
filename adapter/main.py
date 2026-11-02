@@ -24,6 +24,7 @@ class Controller:
         self.active = set()
         self.latest_error = None
         self.mdi_pending_serial = None
+        self.programs = None
 
     def poll(self):
         self.status.poll()
@@ -77,6 +78,10 @@ class Controller:
                 "enabled": bool(s.enabled), "task_mode": s.task_mode,
                 "interp_state": s.interp_state, "paused": bool(s.paused),
                 "line": s.motion_line, "file": s.file, "mdi_pending": self.mdi_pending_serial is not None,
+                "echo_serial_number": getattr(s, "echo_serial_number", 0),
+                "loaded_program_id": self.programs.loaded(s) if self.programs else None,
+                "running_program_id": self.programs.running if self.programs else None,
+                "source_line": max(0, s.motion_line-1) if self.programs and self.programs.loaded(s) else s.motion_line,
                 "error": self.latest_error, "sample_monotonic": time.monotonic()}
 
     def execute(self, msg):
@@ -86,6 +91,8 @@ class Controller:
             raise ValueError("Missing session")
         if cmd == "status":
             return self.snapshot()
+        if self.programs and cmd not in ("status", "program_prepare", "program_open", "program_run", "program_pause", "program_resume", "release"):
+            self.programs.ticket = None
         if cmd in ("stop", "abort", "estop"):
             if cmd == "estop":
                 self.command.state(self.api.STATE_ESTOP)
@@ -98,6 +105,8 @@ class Controller:
                     raise
             return {}
         if cmd == "release":
+            if self.programs and self.programs.ticket and self.programs.ticket["owner"] == owner:
+                self.programs.ticket = None
             if owner == self.owner:
                 self.stop()
             return {}
@@ -121,6 +130,10 @@ class Controller:
             return {}
         if not s.enabled:
             raise ValueError("Machine is disabled")
+        if cmd in ("program_prepare", "program_open", "program_run", "program_pause", "program_resume"):
+            if self.programs is None:
+                raise ValueError("Preview a program before running")
+            return self.programs.execute(self, msg, s)
         if cmd in ("mdi_mode", "mdi"):
             if (s.interp_state != self.api.INTERP_IDLE or s.paused or self.active or
                     any(j.get("homing", False) for j in getattr(s, "joint", ())) or
@@ -230,10 +243,22 @@ async def serve(controller, socket_path):
                 status = controller.poll()
                 if controller.active or status.interp_state != controller.api.INTERP_IDLE:
                     raise ValueError("Preview requires an idle machine")
+                from adapter.programs import Programs, execution_text, signature, matches
                 context = context_for(status, msg.get("text"))
+                baseline = signature(status)
+                context["text"] = execution_text(context)
+                context["source_offset"] = 1
                 preview_busy = True
                 try:
                     reply = await generate(context)
+                    if reply.get("ok") and reply["data"].get("segments"):
+                        current = controller.poll()
+                        if current.interp_state != controller.api.INTERP_IDLE or not matches(baseline, current):
+                            raise ValueError("Machine moved or offsets changed during preview; upload again")
+                        if controller.programs is None:
+                            controller.programs = Programs(controller.program_dir)
+                        identity = controller.programs.save(context["text"], baseline, current.file)
+                        reply["data"]["program_id"] = identity
                 finally:
                     preview_busy = False
             else:
