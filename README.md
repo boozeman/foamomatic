@@ -33,6 +33,12 @@ XYUV-only LinuxCNC adapter and container gateway. Initial backend foundation;
 includes browser status, XYUV toolpath and G-code preview, MDI and machine state controls. Program execution controls, heater controls and hardware watchdog integration are not implemented yet.
 Not commissioned for operating a physical machine.
 
+## Some pictures
+
+| ![Machine Status] (pics/machine_status.png)| ![Toolpath and Preview] (pics/toolpath_and_preview.png) |![MDI] (pics/mdi.png) | ![Connection] (pics/connection.png) |
+
+
+
 ## Deployment architecture
 
 Run LinuxCNC, its real-time Mesa driver and this small Python adapter on the
