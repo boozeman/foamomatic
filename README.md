@@ -400,3 +400,43 @@ Foamomatic is licensed under the **GNU General Public License, version 3 only**
 the terms for copying, modification and distribution.
 
 Third-party dependencies remain subject to their respective licenses.
+
+
+## LinuxCNC lifecycle supervision
+
+The host adapter is supervised by the existing systemd service
+(Restart=on-failure, RestartSec=5). It requires one running linuxcncsvr before
+opening its control socket and captures the process PID and kernel start time.
+PID reuse is detected. If LinuxCNC stops or restarts, the adapter invalidates
+its old connection and exits with a failure status; systemd retries until the
+new LinuxCNC runtime and channels are available.
+
+The adapter also polls channel health while idle (every 0.5 seconds). Three
+consecutive failed health checks trigger a restart. Active jogs retain the
+existing faster lease watchdog. This lifecycle supervisor is not a replacement
+for an independent hardware/HAL safety watchdog and does not restart LinuxCNC.
+
+Every control request checks the bound runtime before using its NML objects.
+A lost runtime clears local jog ownership, pending MDI and preview/run authority.
+It does not automatically enable, home, resume or replay commands.
+Upload/preview again before a new program run after reconnecting.
+
+The gateway keeps polling the host socket and can recover status without a Docker
+restart or browser reload if its WebSocket is still connected. Controls become
+unavailable while status is missing. RuntimeDirectoryPreserve=yes keeps the bind
+mount directory stable while the socket itself is recreated.
+
+After pulling this change, with the machine idle:
+
+    sudo systemctl restart foamomatic-adapter
+
+No Docker rebuild or unit reinstall is needed when using the supplied existing
+systemd unit. Follow the logs to verify shutdown/restart recovery on Debian:
+
+    journalctl -u foamomatic-adapter -f
+
+For verification, stop LinuxCNC and start it again while the machine is idle.
+Expect a runtime-change/waiting message, a new connection PID, and status returning
+in the browser. Recovery includes the configured five-second restart interval
+plus LinuxCNC startup time. Actual machine-host integration must be verified
+locally; automated tests simulate runtime identity and channel failures.

@@ -4,6 +4,8 @@ import asyncio
 import json
 import math
 import signal
+import sys
+from adapter.runtime import RuntimeGuard, RuntimeUnavailable
 from pathlib import Path
 import stat
 import time
@@ -25,8 +27,30 @@ class Controller:
         self.latest_error = None
         self.mdi_pending_serial = None
         self.programs = None
+        self.runtime_guard = None
+        self.connection_failure = None
+
+    def check_runtime(self):
+        if self.connection_failure is not None:
+            raise RuntimeUnavailable(self.connection_failure)
+        if self.runtime_guard is not None:
+            try:
+                self.runtime_guard.check()
+            except RuntimeUnavailable as exc:
+                self.invalidate_connection(str(exc))
+                raise
+
+    def invalidate_connection(self, reason):
+        # Local state only: never send stale commands into a new runtime.
+        self.connection_failure = reason
+        self.active.clear()
+        self.owner = None
+        self.deadline = 0.0
+        self.mdi_pending_serial = None
+        self.programs = None
 
     def poll(self):
+        self.check_runtime()
         self.status.poll()
         if self.status.axis_mask != MASK:
             raise ValueError("Expected exactly XYUV axes")
@@ -39,6 +63,7 @@ class Controller:
         return self.status
 
     def stop(self):
+        self.check_runtime()
         # Attempt every axis even if one LinuxCNC command fails.
         failure = None
         for index in AXES.values():
@@ -85,6 +110,7 @@ class Controller:
                 "error": self.latest_error, "sample_monotonic": time.monotonic()}
 
     def execute(self, msg):
+        self.check_runtime()
         cmd = msg.get("cmd")
         owner = msg.get("session")
         if not isinstance(owner, str) or not 1 <= len(owner) <= 80:
@@ -280,19 +306,36 @@ async def serve(controller, socket_path):
             await writer.wait_closed()
 
     async def watchdog():
+        failures = 0
+        next_health_check = 0.0
         while True:
             try:
                 controller.expire()
-                if controller.active:
+                now = time.monotonic()
+                if controller.active or now >= next_health_check:
+                    controller.check_runtime()
                     s = controller.poll()
-                    if s.estop or not s.enabled or s.motion_mode != controller.api.TRAJ_MODE_TELEOP:
+                    failures = 0
+                    next_health_check = now + 0.5
+                    if controller.active and (s.estop or not s.enabled or
+                            s.motion_mode != controller.api.TRAJ_MODE_TELEOP):
                         controller.stop()
-            except Exception:
-                # A broken LinuxCNC link must never keep renewing a lease.
+            except RuntimeUnavailable as exc:
+                controller.invalidate_connection(str(exc))
+                main_task.cancel()
+                return
+            except Exception as exc:
+                failures += 1
+                next_health_check = time.monotonic() + 0.5
                 try:
                     controller.stop()
                 except Exception:
                     pass
+                if failures >= 3:
+                    controller.invalidate_connection(
+                        "LinuxCNC health check failed repeatedly (%s: %s); reconnecting" % (type(exc).__name__, exc))
+                    main_task.cancel()
+                    return
             await asyncio.sleep(0.02)
 
     server = await asyncio.start_unix_server(client, str(path), limit=2*1024*1024)
@@ -304,7 +347,8 @@ async def serve(controller, socket_path):
     finally:
         task.cancel()
         try:
-            controller.stop()
+            if controller.connection_failure is None:
+                controller.stop()
         finally:
             path.unlink(missing_ok=True)
 
@@ -318,7 +362,22 @@ def main():
     if not math.isfinite(args.max_jog) or args.max_jog <= 0:
         parser.error("--max-jog must be finite and positive")
     import linuxcnc
-    asyncio.run(serve(Controller(linuxcnc, args.program_dir, args.max_jog), args.socket))
+    controller = None
+    try:
+        guard = RuntimeGuard.connect()
+        controller = Controller(linuxcnc, args.program_dir, args.max_jog)
+        controller.runtime_guard = guard
+        controller.poll()
+        print("Foamomatic connected to LinuxCNC runtime PID %s" % guard.identity[0], file=sys.stderr, flush=True)
+        asyncio.run(serve(controller, args.socket))
+    except asyncio.CancelledError:
+        # SIGTERM is a clean stop; runtime loss must trigger systemd Restart=on-failure.
+        if controller is not None and controller.connection_failure is not None:
+            raise SystemExit(controller.connection_failure)
+    except RuntimeUnavailable as exc:
+        raise SystemExit(str(exc))
+    except KeyboardInterrupt:
+        pass
 
 if __name__ == "__main__":
     main()
