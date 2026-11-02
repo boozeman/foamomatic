@@ -9,6 +9,9 @@ services:
     environment:
       FOAM_TOKEN: "${FOAM_TOKEN:?Set FOAM_TOKEN in .env}"
       FOAM_ORIGINS: "${FOAM_ORIGINS:?Set FOAM_ORIGINS in .env}"
+      FOAM_VIEW_WIDTH_MM: "${FOAM_VIEW_WIDTH_MM:-1000}"
+      FOAM_VIEW_HORIZONTAL_MAX_MM: "${FOAM_VIEW_HORIZONTAL_MAX_MM:-710}"
+      FOAM_VIEW_VERTICAL_MAX_MM: "${FOAM_VIEW_VERTICAL_MAX_MM:-260}"
     volumes:
       - /run/foamomatic:/run/foamomatic:ro
     read_only: true

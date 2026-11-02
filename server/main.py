@@ -2,6 +2,7 @@
 import asyncio
 import json
 import logging
+import math
 import os
 import secrets
 import uuid
@@ -34,6 +35,12 @@ async def rpc(message):
 async def lifespan(app):
     if len(TOKEN) < 32 or not ALLOWED:
         raise RuntimeError("Set FOAM_TOKEN (32+ characters) and exact FOAM_ORIGINS")
+    for key, default in (("FOAM_VIEW_WIDTH_MM", "1000"),
+                         ("FOAM_VIEW_HORIZONTAL_MAX_MM", "710"),
+                         ("FOAM_VIEW_VERTICAL_MAX_MM", "260")):
+        value = float(os.getenv(key, default))
+        if not math.isfinite(value) or not 0 < value <= 100000:
+            raise RuntimeError("Invalid visualization setting: " + key)
     yield
 
 app = FastAPI(title="Foamomatic XYUV", lifespan=lifespan)
@@ -80,7 +87,12 @@ async def websocket(ws: WebSocket):
             await ws.close(code=1008, reason="Invalid token")
             return
         read_only = auth.get("read_only") is True
-        await emit({"type": "ready", "read_only": read_only, "axes": ["X", "Y", "U", "V"],
+        geometry = {
+            "width_mm": float(os.getenv("FOAM_VIEW_WIDTH_MM", "1000")),
+            "horizontal_max_mm": float(os.getenv("FOAM_VIEW_HORIZONTAL_MAX_MM", "710")),
+            "vertical_max_mm": float(os.getenv("FOAM_VIEW_VERTICAL_MAX_MM", "260")),
+        }
+        await emit({"type": "ready", "geometry": geometry, "read_only": read_only, "axes": ["X", "Y", "U", "V"],
                     "jog_lease_ms": 400, "jog_renew_ms": 100})
         sender = asyncio.create_task(telemetry())
         async def receive():

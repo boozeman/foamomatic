@@ -160,3 +160,28 @@ Additional HTTP/WebSocket tests (fake adapter only):
 
     python -m pip install -r requirements.txt httpx
     python -m unittest discover -s tests -v
+
+
+## XYUV visualization
+
+The browser draws two parallel endpoint planes and a straight wire between
+(X,Y) and (U,V). The nominal display width is 1000 mm, horizontal range 0..710 mm,
+and vertical range 0..260 mm. These are visual reference bounds, NOT LinuxCNC
+travel limits or measured tower spacing. Positions are shown without clamping.
+This initial visualization assumes machine coordinates are in mm.
+
+Configure FOAM_VIEW_WIDTH_MM, FOAM_VIEW_HORIZONTAL_MAX_MM and
+FOAM_VIEW_VERTICAL_MAX_MM in .env (defaults 1000, 710, 260). If you maintain a
+separate Compose file, add these names to the gateway environment mapping.
+No volume is needed: .env on the host supplies persistent configuration.
+After changes rebuild/recreate the gateway.
+
+Drag the canvas to rotate. Clear Trail resets the local observation history;
+Reset View restores the viewing angle. At most 2000 moving sample segments
+are retained in browser memory. The current wire disappears on stale data.
+A connection gap, >1.5 second sampling gap, homing-state or program-file change
+breaks the trail. Page reload discards it. All observed movement is included:
+heater state is not available. At 5 Hz, lines between samples are approximate;
+this is not a G-code preview or proof of the physical cut surface.
+
+Geometry checks: node tests/test_wire_geometry.mjs

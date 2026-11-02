@@ -1,3 +1,4 @@
+import {configureWire, updateWire, unavailableWire} from "./wire-view.js";
 const byId = id => document.getElementById(id);
 const letters = ["X", "Y", "U", "V"];
 let socket = null, lastUpdate = 0, lastSample = null, connectedAt = 0, ready = false;
@@ -16,6 +17,7 @@ function connection(text, kind = "") {
   byId("connection").className = "badge " + kind;
 }
 function clearValues() {
+  unavailableWire();
   latest = null;
   for (const axis of letters) for (const cell of rows[axis].slice(1)) cell.textContent = "—";
   for (const id of ["estop", "enabled", "mode", "program", "file", "line"]) byId(id).textContent = "—";
@@ -43,6 +45,7 @@ function show(data) {
   lastSample = data.sample_monotonic;
   lastUpdate = Date.now();
   latest = data;
+  updateWire(data);
   document.body.classList.remove("stale");
   connection("Yhteys kunnossa", "live");
   byId("notice").textContent = "LinuxCNC:n tilatiedot päivittyvät. Näkymä ei lähetä ohjauskomentoja.";
@@ -93,7 +96,7 @@ byId("login").addEventListener("submit", event => {
     if (socket !== ws) return;
     try {
       const msg = JSON.parse(event.data);
-      if (msg.type === "ready") { ready = true; connection("Odotetaan tilatietoa"); }
+      if (msg.type === "ready") { ready = true; configureWire(msg.geometry); connection("Odotetaan tilatietoa"); }
       if (msg.type === "status" && ready) {
         if (msg.ok) show(msg.data);
         else invalid(msg.error || "LinuxCNC:n tilatietoa ei saada.");
