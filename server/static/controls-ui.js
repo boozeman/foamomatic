@@ -1,5 +1,7 @@
+import {createMdiKeyboard} from "./mdi-keyboard.js";
 import {permissions, mdiStatus} from "./control-policy.mjs";
 export function createControls(send) {
+  const keyboard=createMdiKeyboard();
   const ids={enable:"machine-on",disable:"machine-off",estop:"machine-estop",
     reset_estop:"machine-reset",abort:"machine-abort",mdi_mode:"mdi-mode",manual:"manual-mode",mdi:"mdi-send",home_all:"home-all",home_X:"home-X",home_Y:"home-Y",home_U:"home-U",home_V:"home-V"};
   let state=null,fresh=false,connected=false,busy=false;
@@ -11,6 +13,7 @@ export function createControls(send) {
       document.getElementById(id).disabled=!(cmd.startsWith("home_")&&cmd!=="home_all"?can.home_axis:can[cmd])||(busy&&!["estop","abort","disable"].includes(cmd));
     }
     document.getElementById("mdi-input").disabled=!can.mdi||busy;
+    keyboard.setEnabled(can.mdi&&!busy);
     const help=mdiStatus(state,fresh,connected);
     document.getElementById("mdi-help").textContent=help;
     const modeButton=document.getElementById("mdi-mode");

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Foamomatic · Koneen tila</title>
-<link rel="stylesheet" href="/assets/status.css?v=6">
-<script type="module" src="/assets/status.js?v=6"></script>
+<link rel="stylesheet" href="/assets/status.css?v=7">
+<script type="module" src="/assets/status.js?v=7"></script>
 </head>
 <body>
 <header><a class="brand" href="/">FOAMOMATIC<span>XY / UV</span></a><span class="tag">XYUV-OHJAUS</span></header>
@@ -62,6 +62,41 @@
 <form id="mdi-form">
 <label for="mdi-input">MDI-komento</label>
 <div class="login-row"><input id="mdi-input" type="text" maxlength="254" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Esimerkiksi G90" disabled><button id="mdi-send" type="submit" disabled>Lähetä komento</button></div>
+<details id="mdi-keyboard" class="mdi-keyboard" open>
+<summary>Kosketusnäppäimistö</summary>
+<fieldset id="mdi-keyboard-keys" disabled aria-label="MDI-kosketusnäppäimistö">
+<div class="mdi-key-grid mdi-letter-keys">
+<button type="button" data-mdi-key="G" class="secondary">G</button>
+<button type="button" data-mdi-key="M" class="secondary">M</button>
+<button type="button" data-mdi-key="F" class="secondary">F</button>
+<button type="button" data-mdi-key="S" class="secondary">S</button>
+<button type="button" data-mdi-key="X" class="secondary">X</button>
+<button type="button" data-mdi-key="Y" class="secondary">Y</button>
+<button type="button" data-mdi-key="U" class="secondary">U</button>
+<button type="button" data-mdi-key="V" class="secondary">V</button>
+</div>
+<div class="mdi-key-grid mdi-number-keys">
+<button type="button" data-mdi-key="7" class="secondary">7</button>
+<button type="button" data-mdi-key="8" class="secondary">8</button>
+<button type="button" data-mdi-key="9" class="secondary">9</button>
+<button type="button" data-mdi-key="4" class="secondary">4</button>
+<button type="button" data-mdi-key="5" class="secondary">5</button>
+<button type="button" data-mdi-key="6" class="secondary">6</button>
+<button type="button" data-mdi-key="1" class="secondary">1</button>
+<button type="button" data-mdi-key="2" class="secondary">2</button>
+<button type="button" data-mdi-key="3" class="secondary">3</button>
+<button type="button" data-mdi-key="-" class="secondary" aria-label="Miinus">-</button>
+<button type="button" data-mdi-key="0" class="secondary">0</button>
+<button type="button" data-mdi-key="." class="secondary" aria-label="Desimaalipiste">.</button>
+</div>
+<div class="mdi-key-actions">
+<button type="button" data-mdi-key=" " class="secondary">Välilyönti</button>
+<button type="button" data-mdi-action="backspace" class="secondary" aria-label="Poista edellinen merkki tai valittu teksti">⌫ Poista</button>
+<button type="button" data-mdi-action="clear" class="secondary">Tyhjennä rivi</button>
+<button type="button" data-mdi-action="enter">Enter · Lähetä</button>
+</div>
+</fieldset>
+</details>
 <p id="mdi-help" class="muted small" role="status">Odotetaan koneen tilaa.</p>
 <p class="muted small">Komento suoritetaan oikealla koneella. Lähetyskuittaus tarkoittaa välitystä, ei liikkeen valmistumista. Yhteyskatko ei automaattisesti keskeytä jo alkanutta MDI-liikettä.</p>
 </form>

@@ -262,3 +262,10 @@ no other active homing/jog/MDI. Axis letters map to joints X=0,Y=1,U=2,V=3,
 not the coordinate indices 0,1,6,7. LinuxCNC INI/HAL defines actual homing motion
 and any grouped/synchronized homing restrictions. MDI help lists unhomed axes;
 the mode button reads MDI active when mode 3 is already selected.
+
+
+The MDI tab includes a collapsible touch keyboard: G/M/X/Y/U/V/F/S, digits,
+minus, decimal point, space, delete, clear and Enter. Editing follows the input
+cursor/selection and the 254-character limit. Enter uses the existing MDI submit
+path and all machine-state restrictions. While open, inputmode=none suppresses
+the device keyboard where supported; collapse it to use the device keyboard.
