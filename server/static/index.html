@@ -29,11 +29,11 @@
 <section id="panel-preview" role="tabpanel" aria-labelledby="tab-preview" hidden>
 <section class="wire-panel" aria-label="XYUV-langan visualisointi">
 <div class="panel-heading"><div><h2>Lanka ja havaitut liikeradat</h2><p id="wire-size" class="muted small">1000 mm · nimellinen leveys</p></div><div class="view-actions"><button id="reset-view" class="secondary" type="button">Palauta näkymä</button><button id="clear-trail" class="secondary" type="button">Tyhjennä rata</button></div></div>
-<form id="preview-form" class="preview-form">
+<form id="preview-form" class="preview-form"><fieldset id="preview-operations">
 <label for="preview-file">G-koodin esikatselu</label>
 <div class="login-row"><input id="preview-file" type="file" accept=".ngc,.nc,.tap,.gcode,.txt"><button id="preview-load" type="submit">Näytä esikatselu</button><button id="preview-clear" type="button" class="secondary">Poista esikatselu</button></div>
 <p id="preview-message" class="muted small" role="status">Lataa G0/G1-ohjelma (enintään 256 KiB). Tiedostoa ei avata koneen ajo-ohjelmaksi. Lämmitystä ei mallinneta.</p>
-<label for="preview-step">Ohjelman tarkastelukohta <span id="preview-line">Ei esikatselua</span></label><input id="preview-step" type="range" min="0" max="0" value="0" disabled>
+<label for="preview-step">Ohjelman tarkastelukohta <span id="preview-line">Ei esikatselua</span></label><input id="preview-step" type="range" min="0" max="0" value="0" disabled></fieldset>
 </form>
 <section class="program-controls" aria-label="Esikatsellun ohjelman ajo">
 <p id="program-selection">Esikatsele tiedosto ensin.</p>

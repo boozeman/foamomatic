@@ -269,3 +269,46 @@ minus, decimal point, space, delete, clear and Enter. Editing follows the input
 cursor/selection and the 254-character limit. Enter uses the existing MDI submit
 path and all machine-state restrictions. While open, inputmode=none suppresses
 the device keyboard where supported; collapse it to use the device keyboard.
+
+
+## Execute the previewed program
+
+The toolpath tab now has Run Program, Pause, Resume and Abort. Upload/preview first,
+home all joints, enable the machine, then click Run. The browser performs three
+separate, acknowledged commands: AUTO mode, open the immutable preview copy, then
+AUTO_RUN from the beginning. Each step requires a fresh one-use command token;
+no step is retried. Abort, OFF, ESTOP, disconnect or a manual-mode/MDI command
+cancels the host's start-preparation ticket. Preparation expires after 15 seconds.
+
+The adapter verifies all homed, enable, idle, no manual activity, unchanged initial
+position (0.001 machine units tolerance), active WCS/G92/tool offsets and rotation,
+the loaded path, and the SHA-256 of the preview copy. Start authority is bound to
+the WebSocket session. A start token is consumed before AUTO_RUN, including when
+its response is uncertain. Re-preview to run again, or after moving/changing
+offsets. A host restart invalidates preview IDs.
+
+Both preview and execution use the same generated file with one initialization
+line: machine units, G90, G94, G17, G40, G49 and the captured active WCS.
+This is especially relevant for Devwing programs that end in G93 and do not reset
+G94 in the next program header. Source line numbers are mapped past that line.
+Percent-delimited files are normalized while preserving source-line correspondence.
+M2 is appended to terminate files lacking an explicit end command.
+Machine-specific remaps are currently rejected for running, because the standard
+preview interpreter does not validate them. Other preview limitations still apply.
+
+Copies are stored by the host user under --program-dir/.foamomatic-programs
+(default ~/linuxcnc/nc_files/.foamomatic-programs). Docker needs no extra volume.
+Inactive copies created in the current service session are pruned on subsequent
+successful previews; loaded/running copies are retained. Old files from previous
+service sessions can be removed while the machine is idle, if no longer needed.
+
+During execution, the program runs locally in LinuxCNC: browser network speed
+does not clock the trajectory. A connection loss does not automatically stop it.
+M commands now execute on the real machine according to the current INI/HAL;
+the preview still does not model heater state. M0 requires Resume.
+Pause/Resume address the program started by this adapter; global Abort and ESTOP
+remain available for other machine activity.
+
+Update the adapter and rebuild Docker with the machine idle, then reload the page.
+Real AUTO mode/open/run and the machine's M-code wiring need validation on Debian;
+automated tests use a fake machine only.

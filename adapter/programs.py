@@ -55,7 +55,7 @@ class Programs:
         self.directory.chmod(0o700)
         identity=uuid.uuid4().hex
         path=self.directory/(identity+".ngc")
-        with path.open("x",encoding="utf-8") as stream:
+        with path.open("x",encoding="utf-8",newline="\n") as stream:
             stream.write(text)
         path.chmod(0o600)
         self.records[identity]={"path":path,"digest":hashlib.sha256(text.encode()).hexdigest(),

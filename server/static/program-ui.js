@@ -12,6 +12,7 @@ export function createProgramControls(send){
       state.homed?.length===4&&state.homed.every(Boolean)&&!state.homing?.some(Boolean)&&!state.mdi_pending;
   }
   function render(){
+    document.getElementById("preview-operations").disabled=busy||(fresh&&(state?.interp_state!==1||state?.paused));
     const p=getProgram(),active=p&&state?.loaded_program_id===p.id&&state?.running_program_id===p.id;
     run.disabled=busy||!p||consumed===p.id||!available()||state?.interp_state!==1||state?.paused;
     pause.disabled=busy||!active||!available()||state?.paused||state?.interp_state===1;

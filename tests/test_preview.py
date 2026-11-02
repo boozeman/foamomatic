@@ -74,3 +74,18 @@ class PreviewWorkerTests(unittest.TestCase):
             self.assertEqual(original.read_text(),"5221 999\n")
             self.assertEqual(result["segments"][0]["end"],[25.4,50.8,203.2,228.6])
             self.assertEqual(result["segments"][0]["line"],4)
+
+class InitialPositionCodeTests(unittest.TestCase):
+    def test_homing_roundoff_never_generates_e_words(self):
+        from adapter.preview_worker import initial_position_code
+        line = initial_position_code({"X":-3.885780586188048e-16,
+                                     "Y":1.1379786002407855e-15,"U":0.0,"V":0.0})
+        self.assertEqual(line, "G53 G0 X0 Y0 U0 V0")
+        self.assertNotIn("e", line.lower())
+
+    def test_decimal_coordinates_and_invalid_values(self):
+        from adapter.preview_worker import initial_position_code
+        self.assertEqual(initial_position_code({"X":280.125,"Y":-0.000001,"U":710,"V":120}),
+                         "G53 G0 X280.125 Y-0.000001 U710 V120")
+        with self.assertRaises(ValueError):
+            initial_position_code({"X":float("nan"),"Y":0,"U":0,"V":0})

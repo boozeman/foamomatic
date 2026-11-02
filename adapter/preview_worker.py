@@ -7,6 +7,18 @@ import tempfile
 
 MAX_SEGMENTS = 12000
 
+
+def initial_position_code(position):
+    """RS274 numbers must use decimal notation, never Python's e-notation."""
+    words = []
+    for axis in ("X", "Y", "U", "V"):
+        value = position[axis]
+        if not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise ValueError("Invalid initial coordinate: " + axis)
+        number = format(value, ".12f").rstrip("0").rstrip(".")
+        words.append(axis + ("0" if number in ("", "-0") else number))
+    return "G53 G0 " + " ".join(words)
+
 def parse(context):
     import linuxcnc
     import gcode
@@ -109,7 +121,7 @@ def parse(context):
         canon = Canon()
         canon.parameter_file = str(parameter)
         code = "G21" if context["linear_units"] == 1 else "G20"
-        initial = "G53 G0 " + " ".join(a + str(context["position"][a]) for a in ("X","Y","U","V"))
+        initial = initial_position_code(context["position"])
         wcs = {1:"G54",2:"G55",3:"G56",4:"G57",5:"G58",6:"G59",7:"G59.1",8:"G59.2",9:"G59.3"}[context["g5x_index"]]
         try:
             result, line = gcode.parse(str(program), canon, [code, "G90", wcs, initial], "")
