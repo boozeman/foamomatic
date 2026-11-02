@@ -35,9 +35,14 @@ Not commissioned for operating a physical machine.
 
 ## Some pictures
 
-| ![Machine Status] (pics/machine_status.png)| ![Toolpath and Preview] (pics/toolpath_and_preview.png) |![MDI] (pics/mdi.png) | ![Connection] (pics/connection.png) |
-
-
+<table border='0'>
+<tr>
+<td><img src="pics/machine_status.png" width="400"></td>
+<td><img src="pics/toolpath_and_preview.png" width="400"></td>
+<td><img src="pics/mdi.png" width="400"></td>
+<td><img src="pics/connection.png"></td>
+</tr>
+</table>
 
 ## Deployment architecture
 
