@@ -1,7 +1,7 @@
 # Foamomatic
 
 XYUV-only LinuxCNC adapter and container gateway. Initial backend foundation;
-includes a read-only browser status page; G-code upload/run, heater control and hardware watchdog integration are not implemented yet.
+includes browser status, XYUV toolpath and G-code preview, MDI and machine state controls. Program execution controls, heater controls and hardware watchdog integration are not implemented yet.
 Not commissioned for operating a physical machine.
 
 ## Deployment architecture
@@ -150,7 +150,7 @@ sending control commands. It shows machine/work coordinates, homing state,
 ESTOP, enable, mode, program state and the latest LinuxCNC error.
 Coordinates use the machine's configured units; the adapter does not yet expose
 a unit label. Numbers below half a displayed decimal step render as zero.
-No wire geometry or movement controls are included in this first screen.
+The browser also includes XYUV geometry and machine controls; see the later sections for current behavior.
 
 Status older than three seconds, unavailable adapter data, or a closed connection
 clears the live values. Browser reconnection is manual. /health remains a
