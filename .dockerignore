@@ -1,0 +1,5 @@
+.git
+.env
+adapter
+tests
+__pycache__

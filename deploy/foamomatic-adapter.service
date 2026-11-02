@@ -1,0 +1,18 @@
+[Unit]
+Description=Foamomatic LinuxCNC XYUV adapter
+After=network.target
+
+[Service]
+Type=simple
+User=linuxcnc
+Group=linuxcnc
+RuntimeDirectory=foamomatic
+RuntimeDirectoryMode=0700
+WorkingDirectory=/opt/foamomatic
+ExecStart=/usr/bin/python3 -m adapter.main
+Restart=no
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

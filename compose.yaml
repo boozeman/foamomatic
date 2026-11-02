@@ -1,0 +1,23 @@
+services:
+  gateway:
+    build: .
+    user: "${FOAM_UID:-1000}:${FOAM_GID:-1000}"
+    init: true
+    restart: "no"
+    ports:
+      - "${FOAM_BIND_IP:-127.0.0.1}:8080:8080"
+    environment:
+      FOAM_TOKEN: "${FOAM_TOKEN:?Set FOAM_TOKEN in .env}"
+      FOAM_ORIGINS: "${FOAM_ORIGINS:?Set FOAM_ORIGINS in .env}"
+    volumes:
+      - /run/foamomatic:/run/foamomatic:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    cpus: 0.5
+    mem_limit: 192m
+    pids_limit: 64
