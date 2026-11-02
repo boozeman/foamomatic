@@ -1,6 +1,7 @@
 """Container gateway: bounded latest-state telemetry and session-bound commands."""
 import asyncio
 import json
+import logging
 import os
 import secrets
 import uuid
@@ -12,8 +13,9 @@ from fastapi.staticfiles import StaticFiles
 
 SOCKET = os.getenv("FOAM_SOCKET", "/run/foamomatic/adapter.sock")
 TOKEN = os.environ.get("FOAM_TOKEN", "")
-ALLOWED = set(os.environ.get("FOAM_ORIGINS", "").split(","))
+ALLOWED = {origin.strip() for origin in os.environ.get("FOAM_ORIGINS", "").split(",")}
 ALLOWED.discard("")
+log = logging.getLogger("uvicorn.error")
 SAFE_COMMANDS = {"stop", "abort", "estop", "release"}
 CONTROL_COMMANDS = {"reset_estop", "disable", "enable", "home_all", "manual",
                     "jog", "world", "pause"} | SAFE_COMMANDS
@@ -49,7 +51,8 @@ async def health():
 @app.websocket("/ws")
 async def websocket(ws: WebSocket):
     if ws.headers.get("origin") not in ALLOWED:
-        await ws.close(code=1008)
+        log.warning("WebSocket rejected: origin not allowed")
+        await ws.close(code=1008, reason="Origin not allowed")
         return
     await ws.accept()
     session = uuid.uuid4().hex
@@ -70,10 +73,11 @@ async def websocket(ws: WebSocket):
     try:
         auth = await asyncio.wait_for(ws.receive_json(), 3)
         if not isinstance(auth, dict) or not isinstance(auth.get("token"), str):
-            await ws.close(code=1008)
+            await ws.close(code=1008, reason="Invalid authentication message")
             return
-        if not secrets.compare_digest(auth["token"], TOKEN):
-            await ws.close(code=1008)
+        if not secrets.compare_digest(auth["token"].encode("utf-8"), TOKEN.encode("utf-8")):
+            log.warning("WebSocket rejected: invalid token")
+            await ws.close(code=1008, reason="Invalid token")
             return
         read_only = auth.get("read_only") is True
         await emit({"type": "ready", "read_only": read_only, "axes": ["X", "Y", "U", "V"],
@@ -118,8 +122,18 @@ async def websocket(ws: WebSocket):
                 task.result()
         finally:
             receiver.cancel()
-    except (WebSocketDisconnect, asyncio.TimeoutError, ValueError, RuntimeError, OSError):
+    except WebSocketDisconnect:
         pass
+    except asyncio.TimeoutError:
+        log.warning("WebSocket closed: authentication or send timeout")
+        await ws.close(code=1011, reason="Connection timeout")
+    except Exception as exc:
+        # Do not log messages/payloads: they can contain authentication data.
+        log.error("WebSocket closed: internal error (%s)", type(exc).__name__)
+        try:
+            await ws.close(code=1011, reason="Internal server error")
+        except RuntimeError:
+            pass
     finally:
         if sender:
             sender.cancel()

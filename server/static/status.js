@@ -100,13 +100,21 @@ byId("login").addEventListener("submit", event => {
       }
     } catch { invalid("Palvelimen viestiä ei voitu lukea."); }
   });
-  ws.addEventListener("close", () => {
+  ws.addEventListener("close", event => {
     if (socket !== ws) return;
     const authenticated = ready;
     disconnect();
-    byId("notice").textContent = authenticated
+    const reasons = {
+      "Invalid token": "Yhteysavain ei vastaa käynnissä olevan kontin FOAM_TOKEN-arvoa.",
+      "Origin not allowed": "Sivun osoite puuttuu palvelimen FOAM_ORIGINS-asetuksesta.",
+      "Invalid authentication message": "Tunnistautumisviesti oli virheellinen.",
+      "Connection timeout": "Palvelimen yhteysaikakatkaisu.",
+      "Internal server error": "Palvelimen sisäinen virhe. Tarkista kontin loki."
+    };
+    byId("notice").textContent = (reasons[event.reason] || (authenticated
       ? "Yhteys katkesi. Yhdistä uudelleen nähdäksesi tuoreen tilan."
-      : "Yhteyttä ei hyväksytty. Tarkista yhteysavain ja palvelimen sallittu selainosoite.";
+      : "Yhteyttä ei hyväksytty. Tarkista yhteysavain ja FOAM_ORIGINS.")) +
+      " (WebSocket " + event.code + ")";
   });
   ws.addEventListener("error", () => {
     if (socket === ws) byId("notice").textContent = "Verkkoyhteys ei onnistu.";
@@ -114,8 +122,8 @@ byId("login").addEventListener("submit", event => {
 });
 setInterval(() => {
   if (!socket) return;
-  if ((!ready && Date.now() - connectedAt > 6000) ||
-      (ready && !lastUpdate && Date.now() - connectedAt > 6000)) {
+  // Keep an authenticated connection open while the adapter recovers.
+  if (!ready && Date.now() - connectedAt > 6000) {
     socket.close(); return;
   }
   if (lastUpdate) {
