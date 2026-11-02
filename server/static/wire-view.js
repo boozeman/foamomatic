@@ -6,6 +6,28 @@ let config = {width_mm:1000, horizontal_max_mm:710, vertical_max_mm:260};
 let position = null, last = null, trails = [], live = false, gap = true;
 let yaw = -0.65, pitch = 0.42, dragging = null, previous = null, lastTime = 0;
 const LIMIT = 2000;
+let preview = [], previewStep = 0;
+const slider = document.getElementById("preview-step");
+slider.addEventListener("input", () => {
+  previewStep = Number(slider.value); updatePreviewLabel(); draw();
+});
+function updatePreviewLabel() {
+  const segment=preview[previewStep];
+  document.getElementById("preview-line").textContent=segment
+    ? "Rivi "+segment.line+" · "+(previewStep+1)+"/"+preview.length : "Ei esikatselua";
+}
+export function setPreview(segments) {
+  if(!Array.isArray(segments) || segments.length>12000 ||
+      !segments.every(s=>["rapid","feed"].includes(s.kind) &&
+        [s.start,s.end].every(p=>Array.isArray(p)&&p.length===4&&p.every(Number.isFinite)))) {
+    throw new Error("Virheelliset esikatselukoordinaatit.");
+  }
+  preview=segments;previewStep=Math.max(0,segments.length-1);
+  slider.max=String(previewStep);slider.value=String(previewStep);
+  slider.disabled=!segments.length;updatePreviewLabel();draw();
+}
+export function clearPreview() {setPreview([]);}
+const asPosition = p => ({X:p[0],Y:p[1],U:p[2],V:p[3]});
 function draw() {
   const rect = canvas.getBoundingClientRect();
   const ratio = Math.min(devicePixelRatio || 1, 2);
@@ -32,6 +54,20 @@ function draw() {
     for(let z=100;z<zmax;z+=100)path([[0,y,z],[xmax,y,z]],"#263d37");
   }
   for(const x of [0,xmax])path([[x,0,0],[x,span,0]],"#344c45");
+  for(const segment of preview) {
+    const a=endpoints(asPosition(segment.start),span),b=endpoints(asPosition(segment.end),span);
+    if(segment.kind==="feed"){
+      path([a[0],a[1],b[1],b[0]],"rgba(120,160,240,.1)",1,"rgba(110,150,235,.04)");
+    }
+    ctx.setLineDash(segment.kind==="rapid"?[4,5]:[]);
+    path([a[0],b[0]],segment.kind==="rapid"?"#bf8960":"#89b8f1",1.2);
+    path([a[1],b[1]],segment.kind==="rapid"?"#bf8960":"#b8a4ef",1.2);
+    ctx.setLineDash([]);
+  }
+  const selected=preview[previewStep];
+  if(selected){
+    path(endpoints(asPosition(selected.end),span),"#b8a4ef",2);
+  }
   for(const segment of trails) {
     const a=endpoints(segment[0],span),b=endpoints(segment[1],span);
     path([a[0],a[1],b[1],b[0]],"rgba(91,191,171,.08)",1,"rgba(91,191,171,.055)");

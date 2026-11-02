@@ -7,9 +7,9 @@ import os
 import secrets
 import uuid
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from pathlib import Path
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 SOCKET = os.getenv("FOAM_SOCKET", "/run/foamomatic/adapter.sock")
@@ -21,12 +21,12 @@ SAFE_COMMANDS = {"stop", "abort", "estop", "release"}
 CONTROL_COMMANDS = {"reset_estop", "disable", "enable", "home_all", "manual",
                     "jog", "world", "pause"} | SAFE_COMMANDS
 
-async def rpc(message):
-    reader, writer = await asyncio.wait_for(asyncio.open_unix_connection(SOCKET, limit=65536), 0.5)
+async def rpc(message, *, timeout=0.5, limit=65536):
+    reader, writer = await asyncio.wait_for(asyncio.open_unix_connection(SOCKET, limit=limit), 0.5)
     try:
         writer.write((json.dumps(message, allow_nan=False) + "\n").encode())
         await asyncio.wait_for(writer.drain(), 0.25)
-        return json.loads(await asyncio.wait_for(reader.readline(), 0.5))
+        return json.loads(await asyncio.wait_for(reader.readline(), timeout))
     finally:
         writer.close()
         await writer.wait_closed()
@@ -54,6 +54,45 @@ async def status_page():
 @app.get("/health")
 async def health():
     return {"service": "foamomatic", "status": "running"}
+
+preview_busy = False
+
+@app.post("/preview")
+async def preview_program(request: Request):
+    global preview_busy
+    credential = request.headers.get("authorization", "")
+    expected = "Bearer " + TOKEN
+    if not secrets.compare_digest(credential.encode(), expected.encode()):
+        return JSONResponse({"ok": False, "error": "Invalid token"}, status_code=401)
+    origin = request.headers.get("origin")
+    if origin is not None and origin not in ALLOWED:
+        return JSONResponse({"ok": False, "error": "Origin not allowed"}, status_code=403)
+    if preview_busy:
+        return JSONResponse({"ok": False, "error": "Another preview is running"}, status_code=409)
+    preview_busy = True
+    try:
+        async def read_body():
+            body = bytearray()
+            async for chunk in request.stream():
+                body.extend(chunk)
+                if len(body) > 256*1024:
+                    raise ValueError("File exceeds 256 KiB")
+            return bytes(body).decode("utf-8-sig")
+        text = await asyncio.wait_for(read_body(), 10)
+        if not text.strip():
+            raise ValueError("Empty G-code file")
+        result = await rpc({"cmd": "preview", "session": uuid.uuid4().hex, "text": text},
+                           timeout=22, limit=8*1024*1024)
+        return JSONResponse(result, status_code=200 if result.get("ok") else 422,
+                            headers={"Cache-Control": "no-store"})
+    except (ValueError, UnicodeError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=422)
+    except Exception as exc:
+        log.warning("Preview failed (%s)", type(exc).__name__)
+        return JSONResponse({"ok": False, "error": "Preview unavailable. Check adapter service and update its code."},
+                            status_code=503)
+    finally:
+        preview_busy = False
 
 @app.websocket("/ws")
 async def websocket(ws: WebSocket):

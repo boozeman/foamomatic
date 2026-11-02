@@ -185,3 +185,37 @@ heater state is not available. At 5 Hz, lines between samples are approximate;
 this is not a G-code preview or proof of the physical cut surface.
 
 Geometry checks: node tests/test_wire_geometry.mjs
+
+
+## G-code preview
+
+Upload a UTF-8 .ngc/.nc file using the browser's preview form after connecting.
+The authenticated POST /preview sends at most 256 KiB to the host adapter.
+The adapter invokes LinuxCNC's gcode.parse in a separate, time-limited process;
+it never calls linuxcnc.command, opens a run program, or changes machine files.
+Temporary uploaded files and a private parameter-file copy are deleted afterwards.
+No persistent volume is needed for preview uploads.
+
+G0/G1 paths use all four XYUV coordinates. G0 is dashed orange; G1 endpoints and
+their swept surface are blue/purple. A slider selects the preview wire's position
+and source line, independently of the live wire. Preview is limited to 12000
+segments and 20 seconds of interpretation. Errors discard the entire preview.
+
+LinuxCNC must be running and idle. The starting point, active WCS/G92 offsets
+and XY rotation are captured at upload time. Output is in machine coordinates,
+converted to mm. Re-upload after changing offsets or the intended starting
+position. Inactive WCS parameters come from the disk parameter file and may
+be stale. The standard interpreter is used, without machine-specific remaps,
+INI startup code or external subroutine paths. G2/G3, probing, rigid tapping and
+nonzero tool offsets are explicitly unsupported. Heater M codes are not executed
+or simulated. This preview does not validate machine travel limits.
+
+After updating: restart the host adapter (machine idle) and rebuild the gateway:
+
+    sudo systemctl restart foamomatic-adapter
+    docker compose up -d --build --force-recreate
+
+Refresh the browser. Try examples/xyuv-preview.ngc in the preview form.
+Host dependencies gcode and rs274 are supplied by the LinuxCNC installation;
+they are not installed into Docker. Host-side interpreter integration still
+requires validation on the actual Debian installation.

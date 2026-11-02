@@ -1,0 +1,8 @@
+(Foamomatic preview example - does not start a machine)
+G21 G90 G54
+G0 X20 Y20 U20 V20
+G1 X200 Y20 U160 V30 F200
+G1 X200 Y120 U160 V90
+G1 X20 Y120 U20 V90
+G1 X20 Y20 U20 V20
+M2

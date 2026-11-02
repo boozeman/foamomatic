@@ -1,3 +1,5 @@
+import {setToken} from "./auth-state.mjs";
+import "./preview-ui.js";
 import {configureWire, updateWire, unavailableWire} from "./wire-view.js";
 const byId = id => document.getElementById(id);
 const letters = ["X", "Y", "U", "V"];
@@ -67,6 +69,7 @@ function show(data) {
   byId("error").textContent = data.error ? "LinuxCNC: " + (data.error.message ?? "Tuntematon virhe") : "";
 }
 function disconnect() {
+  setToken("");
   const old = socket;
   socket = null; ready = false;
   if (old) old.close();
@@ -96,7 +99,7 @@ byId("login").addEventListener("submit", event => {
     if (socket !== ws) return;
     try {
       const msg = JSON.parse(event.data);
-      if (msg.type === "ready") { ready = true; configureWire(msg.geometry); connection("Odotetaan tilatietoa"); }
+      if (msg.type === "ready") { ready = true; setToken(token); configureWire(msg.geometry); connection("Odotetaan tilatietoa"); }
       if (msg.type === "status" && ready) {
         if (msg.ok) show(msg.data);
         else invalid(msg.error || "LinuxCNC:n tilatietoa ei saada.");

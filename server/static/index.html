@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Foamomatic · Koneen tila</title>
-<link rel="stylesheet" href="/assets/status.css?v=3">
-<script type="module" src="/assets/status.js?v=3"></script>
+<link rel="stylesheet" href="/assets/status.css?v=4">
+<script type="module" src="/assets/status.js?v=4"></script>
 </head>
 <body>
 <header><a class="brand" href="/">FOAMOMATIC<span>XY / UV</span></a><span class="tag">TILANÄKYMÄ</span></header>
@@ -18,6 +18,12 @@
 <p id="notice" class="notice" role="status">Yhdistä nähdäksesi koneen nykyinen tila.</p>
 <section class="wire-panel" aria-label="XYUV-langan visualisointi">
 <div class="panel-heading"><div><h2>Lanka ja havaitut liikeradat</h2><p id="wire-size" class="muted small">1000 mm · nimellinen leveys</p></div><div class="view-actions"><button id="reset-view" class="secondary" type="button">Palauta näkymä</button><button id="clear-trail" class="secondary" type="button">Tyhjennä rata</button></div></div>
+<form id="preview-form" class="preview-form">
+<label for="preview-file">G-koodin esikatselu</label>
+<div class="login-row"><input id="preview-file" type="file" accept=".ngc,.nc,.tap,.gcode,.txt"><button id="preview-load" type="submit">Näytä esikatselu</button><button id="preview-clear" type="button" class="secondary">Poista esikatselu</button></div>
+<p id="preview-message" class="muted small" role="status">Lataa G0/G1-ohjelma (enintään 256 KiB). Tiedostoa ei avata koneen ajo-ohjelmaksi. Lämmitystä ei mallinneta.</p>
+<label for="preview-step">Ohjelman tarkastelukohta <span id="preview-line">Ei esikatselua</span></label><input id="preview-step" type="range" min="0" max="0" value="0" disabled>
+</form>
 <canvas id="wire-view" aria-label="Käännettävä XYUV-näkymä, lankapäät ja niiden välinen suora lanka"></canvas>
 <div class="wire-caption"><p id="wire-note" class="small muted">Odotetaan tuoretta tilatietoa.</p><p class="small muted">Käännä vetämällä · Rata kertyy vain tämän selainistunnon aikana. Pinta kuvaa näytteistettyä liikettä; lämmitystä ei huomioida. Näyttöalueen alaraja on nimellinen 0 mm.</p></div>
 </section>

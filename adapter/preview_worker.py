@@ -1,0 +1,105 @@
+"""Isolated, read-only LinuxCNC RS274 preview. No linuxcnc.command or HAL."""
+import json
+import math
+from pathlib import Path
+import shutil
+import sys
+import tempfile
+
+MAX_SEGMENTS = 12000
+
+def parse(context):
+    import linuxcnc
+    import gcode
+    from rs274.interpret import Translated, StatMixin
+
+    s = linuxcnc.stat()
+    s.poll()
+    if s.axis_mask != 195:
+        raise ValueError("Preview requires XYUV configuration")
+    if any(abs(v) > 1e-9 for v in s.tool_offset):
+        raise ValueError("Disable tool length compensation before preview")
+    class Canon(Translated, StatMixin):
+        def __init__(self):
+            StatMixin.__init__(self, s, 0)
+            self.lo = tuple(context["position_inches"])
+            self.line = 0
+            self.segments = []
+            self.parameter_file = ""
+        def next_line(self, state):
+            self.line = state.sequence_number
+            self.state = state
+        def move(self, kind, args):
+            target = tuple(self.rotate_and_translate(*args))
+            if not all(math.isfinite(v) for v in target):
+                raise ValueError("Non-finite coordinates")
+            # Initial positioning is supplied as initcode, never rendered.
+            if self.line > 0 and target != self.lo:
+                if len(self.segments) >= MAX_SEGMENTS:
+                    raise ValueError("Preview exceeds 12000 segments")
+                indices = (0,1,6,7)
+                start = [round(self.lo[i]*25.4, 6) for i in indices]
+                end = [round(target[i]*25.4, 6) for i in indices]
+                self.segments.append({"start":start,"end":end,"kind":kind,"line":self.line})
+            self.lo = target
+        def straight_traverse(self,*args): self.move("rapid",args)
+        def straight_feed(self,*args): self.move("feed",args)
+        def arc_feed(self,*args):
+            raise ValueError("G2/G3 arcs are not supported by XYUV preview yet")
+        def straight_probe(self,*args):
+            raise ValueError("Probing is not supported by XYUV preview")
+        def rigid_tap(self,*args):
+            raise ValueError("Rigid tapping is not supported by XYUV preview")
+        def tool_offset(self,*args):
+            if any(abs(v)>1e-9 for v in args):
+                raise ValueError("Tool offsets are not supported by XYUV preview")
+        def set_feed_rate(self,*args): pass
+        def set_spindle_rate(self,*args): pass
+        def select_plane(self,*args): pass
+        def dwell(self,*args): pass
+        def comment(self,*args): pass
+        def message(self,*args): pass
+        def check_abort(self): pass
+        def user_defined_function(self,*args): pass
+
+    with tempfile.TemporaryDirectory(prefix="foamomatic-preview-") as temp:
+        directory = Path(temp)
+        parameter = directory / "preview.var"
+        existing = {}
+        ini = linuxcnc.ini(s.ini_filename)
+        original = ini.find("RS274NGC", "PARAMETER_FILE")
+        if original:
+            original = Path(original).expanduser()
+            if not original.is_absolute():
+                original = Path(s.ini_filename).parent / original
+            if original.is_file():
+                for line in original.read_text().splitlines():
+                    fields = line.split()
+                    if len(fields) == 2:
+                        existing[fields[0]] = fields[1]
+        # Patch fresh offsets captured by the parent; never write the machine var file.
+        existing.update(context["parameters"])
+        parameter.write_text("".join(str(k)+" "+str(v)+"\n" for k,v in sorted(existing.items(), key=lambda item:int(item[0]))))
+        program = directory / "preview.ngc"
+        program.write_text(context["text"], encoding="utf-8")
+        canon = Canon()
+        canon.parameter_file = str(parameter)
+        code = "G21" if context["linear_units"] == 1 else "G20"
+        initial = "G53 G0 " + " ".join(a + str(context["position"][a]) for a in ("X","Y","U","V"))
+        wcs = {1:"G54",2:"G55",3:"G56",4:"G57",5:"G58",6:"G59",7:"G59.1",8:"G59.2",9:"G59.3"}[context["g5x_index"]]
+        result, line = gcode.parse(str(program), canon, [code, "G90", wcs, initial], "")
+        if result > gcode.MIN_ERROR:
+            raise ValueError("Line %s: %s" % (line,gcode.strerror(result)))
+        return {"segments":canon.segments,"units":"mm","frame":"machine",
+                "initial_position":context["position_mm"],
+                "warning":"G0/G1 only; standard interpreter, no machine remaps or external subroutine paths. Offsets are a snapshot at upload time. Heater state is not modeled."}
+
+def main():
+    try:
+        result = {"ok":True,"data":parse(json.load(sys.stdin))}
+    except Exception as exc:
+        result = {"ok":False,"error":str(exc)}
+    print(json.dumps(result,allow_nan=False),flush=True)
+
+if __name__ == "__main__":
+    main()

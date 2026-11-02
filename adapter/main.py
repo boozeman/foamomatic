@@ -170,19 +170,38 @@ async def serve(controller, socket_path):
             await writer.wait_closed()
             raise RuntimeError("Adapter already running")
 
+    preview_busy = False
     async def client(reader, writer):
+        nonlocal preview_busy
+        is_preview = False
         try:
             line = await asyncio.wait_for(reader.readline(), 1.0)
             msg = json.loads(line)
             if not isinstance(msg, dict):
                 raise ValueError("Expected object")
             controller.expire()
-            result = controller.execute(msg)
-            reply = {"ok": True, "data": result}
+            is_preview = msg.get("cmd") == "preview"
+            if is_preview:
+                from adapter.preview import context_for, generate
+                if preview_busy:
+                    raise ValueError("Another preview is running")
+                status = controller.poll()
+                if controller.active or status.interp_state != controller.api.INTERP_IDLE:
+                    raise ValueError("Preview requires an idle machine")
+                context = context_for(status, msg.get("text"))
+                preview_busy = True
+                try:
+                    reply = await generate(context)
+                finally:
+                    preview_busy = False
+            else:
+                result = controller.execute(msg)
+                reply = {"ok": True, "data": result}
         except Exception as exc:
             # Any failed request during a jog terminates its lease.
             try:
-                controller.stop()
+                if not is_preview:
+                    controller.stop()
             except Exception:
                 pass
             reply = {"ok": False, "error": str(exc)}
@@ -209,7 +228,7 @@ async def serve(controller, socket_path):
                     pass
             await asyncio.sleep(0.02)
 
-    server = await asyncio.start_unix_server(client, str(path), limit=8192)
+    server = await asyncio.start_unix_server(client, str(path), limit=2*1024*1024)
     path.chmod(0o600)
     task = asyncio.create_task(watchdog())
     try:
