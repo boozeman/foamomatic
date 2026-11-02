@@ -25,6 +25,26 @@ function sendCommand(payload) {
     commandToken=null;
   });
 }
+const connectionDialog=byId("connection-dialog");
+function syncConnectionButton(){
+  byId("connection-toggle").textContent=ready?"Katkaise":socket?"Peruuta":"Yhdistä";
+}
+function cancelConnectionDialog(){
+  connectionDialog.close();
+  if(socket&&!ready)disconnect();
+  byId("token").value="";
+}
+byId("connection-toggle").addEventListener("click",()=>{
+  if(socket){disconnect();return;}
+  byId("login-feedback").textContent="";
+  connectionDialog.showModal();
+  byId("token").focus();
+});
+byId("login-cancel").addEventListener("click",cancelConnectionDialog);
+connectionDialog.addEventListener("cancel",event=>{
+  event.preventDefault();cancelConnectionDialog();
+});
+
 const rows = {};
 for (const [i, axis] of letters.entries()) {
   const row = document.createElement("tr");
@@ -106,10 +126,10 @@ function disconnect() {
   connection("Ei yhteyttä");
   byId("notice").textContent = "Yhteys katkaistu.";
   byId("connect").disabled = false;
-  byId("disconnect").disabled = true;
+  syncConnectionButton();
   byId("updated").textContent = "Ei tilapäivityksiä";
 }
-byId("disconnect").addEventListener("click", disconnect);
+
 byId("login").addEventListener("submit", event => {
   event.preventDefault();
   const token = byId("token").value;
@@ -118,7 +138,9 @@ byId("login").addEventListener("submit", event => {
   socket = ws; ready = false; lastUpdate = 0; lastSample = null; connectedAt = Date.now();
   clearValues(); connection("Yhdistetään…");
   byId("notice").textContent = "Odotetaan palvelimen vahvistusta.";
-  byId("connect").disabled = true; byId("disconnect").disabled = false;
+  byId("connect").disabled = true;
+  byId("login-feedback").textContent="Yhdistetään…";
+  syncConnectionButton();
   ws.addEventListener("open", () => {
     if (socket !== ws) return;
     ws.send(JSON.stringify({token, read_only: false}));
@@ -128,7 +150,7 @@ byId("login").addEventListener("submit", event => {
     if (socket !== ws) return;
     try {
       const msg = JSON.parse(event.data);
-      if (msg.type === "ready") { ready = true; setToken(token); configureWire(msg.geometry); connection("Odotetaan tilatietoa"); }
+      if (msg.type === "ready") { ready = true; syncConnectionButton(); connectionDialog.close(); setToken(token); configureWire(msg.geometry); connection("Odotetaan tilatietoa"); }
       if(msg.type==="ack"){
         const request=pending.get(msg.id);
         if(request){clearTimeout(request.timer);pending.delete(msg.id);
@@ -157,6 +179,7 @@ byId("login").addEventListener("submit", event => {
       ? "Yhteys katkesi. Yhdistä uudelleen nähdäksesi tuoreen tilan."
       : "Yhteyttä ei hyväksytty. Tarkista yhteysavain ja FOAM_ORIGINS.")) +
       " (WebSocket " + event.code + ")";
+    byId("login-feedback").textContent=byId("notice").textContent;
   });
   ws.addEventListener("error", () => {
     if (socket === ws) byId("notice").textContent = "Verkkoyhteys ei onnistu.";

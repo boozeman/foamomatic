@@ -3,24 +3,23 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Foamomatic · Koneen tila</title>
-<link rel="stylesheet" href="/assets/status.css?v=8">
-<script type="module" src="/assets/status.js?v=8"></script>
+<link rel="stylesheet" href="/assets/status.css?v=9">
+<script type="module" src="/assets/status.js?v=9"></script>
 </head>
 <body>
-<header><a class="brand" href="/">FOAMOMATIC<span>XY / UV</span></a><span class="tag">XYUV-OHJAUS</span></header>
+<header class="app-header">
+<div class="header-top"><span class="brand">FOAMOMATIC<span>XY / UV</span></span><div class="connection-controls"><span id="connection" class="badge" role="status" aria-live="polite">Ei yhteyttä</span><button id="connection-toggle" class="secondary" type="button" aria-haspopup="dialog">Yhdistä</button></div></div>
+<div class="safety-buttons" aria-label="Koneen ohjaus"><button id="machine-estop" class="danger emergency" type="button" disabled>HÄTÄSEIS</button><button id="machine-reset" class="secondary" type="button" disabled>Kuittaa hätäseis</button><button id="machine-on" type="button" disabled>Käyttölupa päälle</button><button id="machine-off" class="secondary" type="button" disabled>Käyttölupa pois</button><button id="machine-abort" class="danger-outline" type="button" disabled>Keskeytä</button></div>
+<div class="header-messages"><p id="notice">Yhdistä nähdäksesi koneen tilan.</p><p id="control-message" role="status"></p></div>
+</header>
+<dialog id="connection-dialog" class="connection-dialog" aria-labelledby="connection-title">
+<form id="login"><h2 id="connection-title">Yhdistä koneeseen</h2>
+<label for="token">Yhteysavain</label><input id="token" type="password" autocomplete="off" required aria-describedby="token-note" placeholder="Palvelimen FOAM_TOKEN">
+<p id="token-note" class="muted small">Avainta ei tallenneta selaimeen. Yhteys mahdollistaa koneen ohjauksen.</p><p id="login-feedback" role="status"></p>
+<div class="dialog-actions"><button id="login-cancel" type="button" class="secondary">Peruuta</button><button id="connect" type="submit">Yhdistä</button></div></form>
+</dialog>
 <main>
-<div class="heading"><div><p class="eyebrow">KUUMALANKALEIKKURI</p><h1>Koneen tila</h1><p class="muted">Vasen XY · Oikea UV</p></div><div id="connection" class="badge" role="status" aria-live="polite">Ei yhteyttä</div></div>
-<form id="login">
-<label for="token">Yhteysavain</label>
-<div class="login-row"><input id="token" type="password" autocomplete="off" required aria-describedby="token-note" placeholder="Palvelimen FOAM_TOKEN"><button id="connect" type="submit">Yhdistä</button><button id="disconnect" type="button" class="secondary" disabled>Katkaise</button></div>
-<p id="token-note" class="muted small">Avainta ei tallenneta selaimen muistiin. Yhteys mahdollistaa koneen ohjauksen.</p>
-</form>
-<p id="notice" class="notice" role="status">Yhdistä nähdäksesi koneen nykyinen tila.</p>
-<section class="machine-actions" aria-label="Koneen ohjaus">
-<div class="safety-buttons"><button id="machine-estop" class="danger emergency" type="button" disabled>HÄTÄSEIS</button><button id="machine-reset" class="secondary" type="button" disabled>Kuittaa hätäseis</button><button id="machine-on" type="button" disabled>Käyttölupa päälle</button><button id="machine-off" class="secondary" type="button" disabled>Käyttölupa pois</button><button id="machine-abort" class="danger-outline" type="button" disabled>Keskeytä liike / komento</button></div>
-<p id="control-message" class="small" role="status">Yhdistä nähdäksesi koneen tilan ja käyttääksesi ohjaimia.</p>
-<p class="muted small">Hätäseis-painike lähettää LinuxCNC:n ohjelmallisen hätäseiskomennon. Se ei korvaa koneen fyysistä hätäseispiiriä.</p>
-</section>
+<h1 class="sr-only">Foamomatic · Koneen ohjaus</h1>
 <nav class="tabs" role="tablist" aria-label="Koneen näkymät">
 <button id="tab-status" role="tab" aria-selected="true" aria-controls="panel-status" type="button">Koneen tila</button>
 <button id="tab-preview" role="tab" aria-selected="false" aria-controls="panel-preview" tabindex="-1" type="button">Rata ja esikatselu</button>
@@ -29,21 +28,23 @@
 <section id="panel-preview" role="tabpanel" aria-labelledby="tab-preview" hidden>
 <section class="wire-panel" aria-label="XYUV-langan visualisointi">
 <div class="panel-heading"><div><h2>Lanka ja havaitut liikeradat</h2><p id="wire-size" class="muted small">1000 mm · nimellinen leveys</p></div><div class="view-actions"><button id="reset-view" class="secondary" type="button">Palauta näkymä</button><button id="clear-trail" class="secondary" type="button">Tyhjennä rata</button></div></div>
+<div class="preview-sidebar">
 <form id="preview-form" class="preview-form"><fieldset id="preview-operations">
 <label for="preview-file">G-koodin esikatselu</label>
 <div class="login-row"><input id="preview-file" type="file" accept=".ngc,.nc,.tap,.gcode,.txt"><button id="preview-load" type="submit">Näytä esikatselu</button><button id="preview-clear" type="button" class="secondary">Poista esikatselu</button></div>
-<p id="preview-message" class="muted small" role="status">Lataa G0/G1-ohjelma (enintään 256 KiB). Tiedostoa ei avata koneen ajo-ohjelmaksi. Lämmitystä ei mallinneta.</p>
+<p id="preview-message" class="muted small" role="status">G0/G1 · enintään 256 KiB. Esikatselu ei käynnistä konetta.</p>
 <label for="preview-step">Ohjelman tarkastelukohta <span id="preview-line">Ei esikatselua</span></label><input id="preview-step" type="range" min="0" max="0" value="0" disabled></fieldset>
 </form>
+</div>
+<canvas id="wire-view" aria-label="Käännettävä XYUV-näkymä, lankapäät ja niiden välinen suora lanka"></canvas>
 <section class="program-controls" aria-label="Esikatsellun ohjelman ajo">
 <p id="program-selection">Esikatsele tiedosto ensin.</p>
 <div class="view-actions"><button id="program-run" type="button" disabled>Aja ohjelma</button><button id="program-pause" class="secondary" type="button" disabled>Tauko</button><button id="program-resume" type="button" disabled>Jatka</button><button id="program-stop" class="danger-outline" type="button" disabled>Keskeytä ajo</button></div>
 <p id="program-message" class="small" role="status">Ajo suorittaa esikatsellun ohjelman koneella, myös sen M-komennot.</p>
 <p id="program-progress" class="muted small" role="status">Ei tuoretta ajotietoa.</p>
-<p class="muted small">Ohjelma suoritetaan paikallisesti LinuxCNC:ssä. Selainyhteyden katkeaminen ei pysäytä ajoa. Aloituspaikan tai koordinaatiston muuttamisen jälkeen tarvitaan uusi esikatselu.</p>
+<details class="compact-help"><summary>Ajon toiminta</summary><p>Ohjelma suoritetaan paikallisesti LinuxCNC:ssä. Selainyhteyden katkeaminen ei pysäytä ajoa. Aloituspaikan tai koordinaatiston muuttamisen jälkeen tarvitaan uusi esikatselu.</p></details>
 </section>
-<canvas id="wire-view" aria-label="Käännettävä XYUV-näkymä, lankapäät ja niiden välinen suora lanka"></canvas>
-<div class="wire-caption"><p id="wire-note" class="small muted">Odotetaan tuoretta tilatietoa.</p><p class="small muted">Käännä vetämällä · Rata kertyy vain tämän selainistunnon aikana. Pinta kuvaa näytteistettyä liikettä; lämmitystä ei huomioida. Näyttöalueen alaraja on nimellinen 0 mm.</p></div>
+<div class="wire-caption"><p id="wire-note" class="small muted">Odotetaan tuoretta tilatietoa.</p><details class="compact-help"><summary>Käännä vetämällä · Tietoa visualisoinnista</summary><p>Rata kertyy vain tämän selainistunnon aikana. Pinta kuvaa näytteistettyä liikettä; lämmitystä ei huomioida. Näyttöalueen alaraja on nimellinen 0 mm.</p></details></div>
 </section>
 </section>
 <section id="panel-status" role="tabpanel" aria-labelledby="tab-status">
@@ -55,7 +56,7 @@
 <article><div class="panel-heading"><h2>Vasen puoli</h2><span>XY</span></div><div class="table-wrap"><table><thead><tr><th>Akseli</th><th>Kone</th><th>Työ</th><th>Kotiajo</th></tr></thead><tbody id="left"></tbody></table></div></article>
 <article><div class="panel-heading"><h2>Oikea puoli</h2><span>UV</span></div><div class="table-wrap"><table><thead><tr><th>Akseli</th><th>Kone</th><th>Työ</th><th>Kotiajo</th></tr></thead><tbody id="right"></tbody></table></div></article>
 </section>
-<p class="muted small">Koordinaatit koneen määrittämissä pituusyksiköissä.</p>
+<p class="muted small" style="margin:6px 0">Koordinaatit koneen määrittämissä pituusyksiköissä.</p>
 <section class="facts" aria-label="Koneen tila">
 <div><span>Hätäseis</span><strong id="estop">—</strong></div>
 <div><span>Koneen käyttölupa</span><strong id="enabled">—</strong></div>
@@ -105,11 +106,11 @@
 </fieldset>
 </details>
 <p id="mdi-help" class="muted small" role="status">Odotetaan koneen tilaa.</p>
-<p class="muted small">Komento suoritetaan oikealla koneella. Lähetyskuittaus tarkoittaa välitystä, ei liikkeen valmistumista. Yhteyskatko ei automaattisesti keskeytä jo alkanutta MDI-liikettä.</p>
+<details class="compact-help"><summary>MDI-komentojen toiminta</summary><p>Komento suoritetaan oikealla koneella. Lähetyskuittaus tarkoittaa välitystä, ei liikkeen valmistumista. Yhteyskatko ei automaattisesti keskeytä jo alkanutta MDI-liikettä.</p></details>
 </form>
 <div class="mdi-history"><div class="panel-heading"><h2>Tämän istunnon lähetykset</h2><button id="mdi-clear-history" class="secondary" type="button">Tyhjennä</button></div><ol id="mdi-history" aria-label="MDI-komentohistoria"></ol></div></article>
 </section>
 <p id="error" class="error" role="alert" hidden></p>
-<footer><span>XYUV · LinuxCNC</span><span id="updated">Ei tilapäivityksiä</span></footer>
+<footer><span title="Verkkopainike ei korvaa koneen fyysistä hätäseispiiriä.">XYUV · LinuxCNC · Ohjelmallinen ohjaus</span><span id="updated">Ei tilapäivityksiä</span></footer>
 </main>
 </body></html>

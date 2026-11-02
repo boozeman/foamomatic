@@ -312,3 +312,24 @@ remain available for other machine activity.
 Update the adapter and rebuild Docker with the machine idle, then reload the page.
 Real AUTO mode/open/run and the machine's M-code wiring need validation on Debian;
 automated tests use a fake machine only.
+
+
+## Compact tablet layout
+
+The header stays visible with ESTOP, reset, enable/disable, abort, connection state
+and one Connect/Disconnect button. Connect opens a native dialog for the token;
+successful authentication closes it. Cancel/Escape cancels an in-progress
+connection. No token is saved to browser storage.
+
+At tablet sizes (700+ CSS pixels wide, 650+ high), the application uses the
+available viewport. Toolpath upload is beside the canvas; run controls sit below.
+MDI keyboard and history share the panel, with bounded history scrolling.
+Long help text is available through expandable summaries. Smaller/shorter screens
+retain document scrolling rather than hiding controls.
+Default views were checked in headless Edge at 1024x768, 1280x800 and 768x1024
+without document, panel or editor scrolling. Expanded help, long errors, large
+text/zoom or a device keyboard can still require internal scrolling.
+A 390x844 phone viewport was checked for horizontal overflow and header access.
+
+Only the Docker frontend needs rebuilding for this layout update; the host
+adapter/systemd service does not need restarting.
