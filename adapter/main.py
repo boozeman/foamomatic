@@ -71,7 +71,9 @@ class Controller:
         work = {a: work[a] - s.g92_offset[i] for a, i in AXES.items()}
         return {"axes": list(AXES), "machine": machine, "work": work,
                 "joint_positions": list(s.joint_actual_position)[:4],
-                "homed": list(s.homed)[:4], "estop": bool(s.estop),
+                "homed": list(s.homed)[:4],
+                "homing": [bool(j.get("homing", False)) for j in getattr(s, "joint", ())[:4]],
+                "estop": bool(s.estop),
                 "enabled": bool(s.enabled), "task_mode": s.task_mode,
                 "interp_state": s.interp_state, "paused": bool(s.paused),
                 "line": s.motion_line, "file": s.file, "mdi_pending": self.mdi_pending_serial is not None,
@@ -121,6 +123,7 @@ class Controller:
             raise ValueError("Machine is disabled")
         if cmd in ("mdi_mode", "mdi"):
             if (s.interp_state != self.api.INTERP_IDLE or s.paused or self.active or
+                    any(j.get("homing", False) for j in getattr(s, "joint", ())) or
                     self.mdi_pending_serial is not None):
                 raise ValueError("Machine must be idle")
             if len(s.homed) < 4 or not all(s.homed[:4]):
@@ -138,14 +141,20 @@ class Controller:
             self.command.mdi(text.strip())
             self.mdi_pending_serial = self.command.serial
             return {}
-        if cmd in ("home_all", "jog"):
+        if cmd in ("home_all", "home_axis", "jog"):
             if s.task_mode != self.api.MODE_MANUAL or s.interp_state != self.api.INTERP_IDLE:
                 raise ValueError("Select MANUAL and idle first")
-        if cmd == "home_all":
+        if cmd in ("home_all", "home_axis"):
+            if (self.mdi_pending_serial is not None or s.paused or
+                    any(j.get("homing", False) for j in getattr(s, "joint", ()))):
+                raise ValueError("Wait until machine and homing are idle")
+            axis = msg.get("axis")
+            if cmd == "home_axis" and axis not in AXES:
+                raise ValueError("Axis must be X,Y,U,V")
             if self.active:
                 raise ValueError("Stop jogging first")
             self.command.teleop_enable(False)
-            self.command.home(-1)
+            self.command.home(-1 if cmd == "home_all" else list(AXES).index(axis))
         elif cmd == "manual":
             if s.interp_state != self.api.INTERP_IDLE or self.active:
                 raise ValueError("Machine must be idle")

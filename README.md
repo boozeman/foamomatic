@@ -254,3 +254,11 @@ Deploy with the machine idle:
     docker compose up -d --build --force-recreate
 
 Then hard-refresh the browser. Test first with a non-motion MDI such as G90.
+
+
+Individual homing is available in the Machine Status tab (X/Y/U/V and Home All).
+Select Manual mode first. Homing requires enable, no ESTOP, idle interpreter and
+no other active homing/jog/MDI. Axis letters map to joints X=0,Y=1,U=2,V=3,
+not the coordinate indices 0,1,6,7. LinuxCNC INI/HAL defines actual homing motion
+and any grouped/synchronized homing restrictions. MDI help lists unhomed axes;
+the mode button reads MDI active when mode 3 is already selected.

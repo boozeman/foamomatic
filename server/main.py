@@ -20,7 +20,7 @@ ALLOWED.discard("")
 log = logging.getLogger("uvicorn.error")
 SAFE_COMMANDS = {"stop", "abort", "estop", "release"}
 CONTROL_COMMANDS = {"reset_estop", "disable", "enable", "home_all", "manual",
-                    "jog", "world", "pause", "mdi_mode", "mdi"} | SAFE_COMMANDS
+                    "jog", "world", "pause", "mdi_mode", "mdi", "home_axis"} | SAFE_COMMANDS
 
 async def rpc(message, *, timeout=0.5, limit=65536):
     reader, writer = await asyncio.wait_for(asyncio.open_unix_connection(SOCKET, limit=limit), 0.5)
@@ -153,7 +153,7 @@ async def websocket(ws: WebSocket):
                 if read_only:
                     await acknowledge(msg, {"ok": False, "error": "Read-only session"})
                     continue
-                if msg["cmd"] in {"enable", "reset_estop", "mdi_mode", "mdi", "manual"}:
+                if msg["cmd"] in {"enable", "reset_estop", "mdi_mode", "mdi", "manual", "home_all", "home_axis"}:
                     token = msg.get("command_token")
                     issued = command_tokens.pop(token, None) if isinstance(token, str) else None
                     if issued is None or time.monotonic() - issued > 1.0:

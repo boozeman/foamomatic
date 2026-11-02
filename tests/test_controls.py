@@ -51,4 +51,19 @@ class ControlsTests(unittest.TestCase):
         self.send("disable")
         self.assertIn(("state",self.api.STATE_OFF),self.api.calls)
 
+
+    def test_individual_homing_uses_joint_numbers_not_coordinate_indices(self):
+        self.api.teleop_enable=lambda value:self.api.calls.append(("teleop",value))
+        self.api.home=lambda value:self.api.calls.append(("home",value))
+        for axis,joint in (("X",0),("Y",1),("U",2),("V",3)):
+            self.send("home_axis",axis=axis)
+            self.assertEqual(self.api.calls[-1],("home",joint))
+        self.send("home_all")
+        self.assertEqual(self.api.calls[-1],("home",-1))
+        self.api.s.task_mode=3
+        with self.assertRaises(ValueError):self.send("home_axis",axis="U")
+        self.api.s.task_mode=1
+        self.api.s.joint=[{"homing":True}]+[{"homing":False}]*3
+        with self.assertRaises(ValueError):self.send("home_axis",axis="V")
+
 if __name__=="__main__":unittest.main()
