@@ -30,19 +30,53 @@ tension; no sag, stretch, or fixed-length constraint is modeled.
 
 ## Host installation
 
-Use the system Python that imports linuxcnc, not a new venv. Copy this project
-to /opt/foamomatic (or adjust the unit). Edit deploy/foamomatic-adapter.service:
-User and Group MUST match the LinuxCNC operator, and FOAM_UID/GID must match
-that account. Socket ownership is the local access boundary.
+Use the Debian system Python that imports linuxcnc, not a new venv.
+Run these commands on the Debian host from the foamomatic checkout, as the
+same regular user who runs LinuxCNC.
 
-Install the unit as /etc/systemd/system/foamomatic-adapter.service, then run:
+1. With the machine idle, stop the manually started adapter with Ctrl+C.
+2. Install and enable the service:
 
-    sudo systemctl daemon-reload
-    sudo systemctl start foamomatic-adapter
+       sudo python3 deploy/install_systemd.py --user "$(id -un)"
 
-Start LinuxCNC separately with the machine's validated XYUV INI/HAL config.
-The adapter stays available when LinuxCNC is not running, but status and control
-return explicit errors. No real-machine INI or Mesa pin assignment is supplied.
+The installer verifies LinuxCNC imports as that user, validates the generated
+unit, installs it under /etc/systemd/system, and enables/restarts it.
+The installed unit uses this checkout's absolute path and the operator's
+numeric UID/GID. Keep the checkout in place; no /opt copy or venv is required.
+The template deploy/foamomatic-adapter.service must be rendered by the installer,
+not copied directly.
+
+3. Set FOAM_UID and FOAM_GID in .env to the values printed by the installer.
+4. Recreate the gateway to refresh its runtime-directory bind mount:
+
+       docker compose up -d --force-recreate
+
+Check service status and logs:
+
+    systemctl status foamomatic-adapter --no-pager
+    journalctl -u foamomatic-adapter -n 50 --no-pager
+
+Service management:
+
+    sudo systemctl restart foamomatic-adapter
+    sudo systemctl stop foamomatic-adapter
+    sudo systemctl disable --now foamomatic-adapter
+
+Only stop/restart the adapter while the machine is idle. It does not resume
+motion commands after restart. After adapter code updates, restart the service;
+the installer need only be rerun when its unit, checkout path or user changes.
+
+The service starts on boot and retries failures every five seconds, including
+a failed LinuxCNC connection during startup. LinuxCNC itself must still be
+started separately with the validated XYUV INI/HAL configuration. Do not launch
+a second manual adapter while the service is active.
+
+RuntimeDirectoryPreserve=yes retains /run/foamomatic across service stops so
+Docker keeps seeing the same directory. The socket is recreated inside it.
+The /run directory is recreated at host reboot: start the adapter before the
+gateway. If the gateway was started first, recreate it after the adapter starts.
+No systemd sandbox option that hides LinuxCNC's shared memory or temporary
+files is enabled. /health checks only the gateway, not LinuxCNC readiness.
 
 ## Container
 

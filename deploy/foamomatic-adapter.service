@@ -1,18 +1,25 @@
 [Unit]
 Description=Foamomatic LinuxCNC XYUV adapter
 After=network.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-User=linuxcnc
-Group=linuxcnc
+# Rendered by install_systemd.py with the LinuxCNC operator's numeric IDs.
+User=@UID@
+Group=@GID@
 RuntimeDirectory=foamomatic
 RuntimeDirectoryMode=0700
-WorkingDirectory=/opt/foamomatic
-ExecStart=/usr/bin/python3 -m adapter.main
-Restart=no
+# Keep the directory inode stable for Docker's bind mount across stops/restarts.
+RuntimeDirectoryPreserve=yes
+WorkingDirectory=@PROJECT_ROOT@
+ExecStart=/usr/bin/python3 -B -u -m adapter.main
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=5
 UMask=0077
 NoNewPrivileges=true
+Environment=PYTHONDONTWRITEBYTECODE=1
 
 [Install]
 WantedBy=multi-user.target
