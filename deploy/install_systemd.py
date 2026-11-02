@@ -9,11 +9,14 @@ import tempfile
 UNIT = "foamomatic-adapter.service"
 
 def render(template, project_root, uid, gid):
-    # systemd values support quoted paths and expand '%' specifiers.
+    # WorkingDirectory is a single path value, not an ExecStart argument.
+    # Surrounding quotes become literal path characters on supported Debian.
     path = str(project_root)
-    if any(c in path for c in ("\n", "\r", "\x00")):
-        raise ValueError("Unsupported project path")
-    path = '"' + path.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%") + '"'
+    if not path.startswith("/"):
+        raise ValueError("Project path must be absolute")
+    if any(c.isspace() or ord(c) < 32 or c in ('"', "'", "\\") for c in path):
+        raise ValueError("Use a checkout path without whitespace, quotes or backslashes")
+    path = path.replace("%", "%%")
     return (template.replace("@UID@", str(uid)).replace("@GID@", str(gid))
             .replace("@PROJECT_ROOT@", path))
 
