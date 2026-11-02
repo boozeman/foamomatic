@@ -6,6 +6,7 @@ import math
 import os
 import secrets
 import uuid
+import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from pathlib import Path
@@ -19,7 +20,7 @@ ALLOWED.discard("")
 log = logging.getLogger("uvicorn.error")
 SAFE_COMMANDS = {"stop", "abort", "estop", "release"}
 CONTROL_COMMANDS = {"reset_estop", "disable", "enable", "home_all", "manual",
-                    "jog", "world", "pause"} | SAFE_COMMANDS
+                    "jog", "world", "pause", "mdi_mode", "mdi"} | SAFE_COMMANDS
 
 async def rpc(message, *, timeout=0.5, limit=65536):
     reader, writer = await asyncio.wait_for(asyncio.open_unix_connection(SOCKET, limit=limit), 0.5)
@@ -104,6 +105,9 @@ async def websocket(ws: WebSocket):
     session = uuid.uuid4().hex
     sender = None
     output_lock = asyncio.Lock()
+    command_tokens = {}
+    async def acknowledge(msg, response):
+        await emit({"type": "ack", "id": msg.get("id"), "cmd": msg.get("cmd"), **response})
     async def emit(value):
         async with output_lock:
             await asyncio.wait_for(ws.send_json(value), 0.5)
@@ -114,7 +118,13 @@ async def websocket(ws: WebSocket):
             except Exception:
                 response = {"ok": False, "error": "Adapter unavailable"}
             # No historical queue: sample next only after current send completes.
-            await emit({"type": "status", **response})
+            nonce = None
+            if response.get("ok"):
+                nonce = secrets.token_hex(16)
+                command_tokens[nonce] = time.monotonic()
+                while len(command_tokens) > 32:
+                    command_tokens.pop(next(iter(command_tokens)))
+            await emit({"type": "status", "command_token": nonce, **response})
             await asyncio.sleep(0.2)
     try:
         auth = await asyncio.wait_for(ws.receive_json(), 3)
@@ -138,11 +148,17 @@ async def websocket(ws: WebSocket):
             while True:
                 msg = await ws.receive_json()
                 if not isinstance(msg, dict) or msg.get("cmd") not in CONTROL_COMMANDS:
-                    await emit({"type": "ack", "ok": False, "error": "Unsupported command"})
+                    await acknowledge(msg if isinstance(msg, dict) else {}, {"ok": False, "error": "Unsupported command"})
                     continue
                 if read_only:
-                    await emit({"type": "ack", "ok": False, "error": "Read-only session"})
+                    await acknowledge(msg, {"ok": False, "error": "Read-only session"})
                     continue
+                if msg["cmd"] in {"enable", "reset_estop", "mdi_mode", "mdi", "manual"}:
+                    token = msg.get("command_token")
+                    issued = command_tokens.pop(token, None) if isinstance(token, str) else None
+                    if issued is None or time.monotonic() - issued > 1.0:
+                        await acknowledge(msg, {"ok": False, "error": "Command expired; wait for fresh status and submit again"})
+                        continue
                 # Reject queued/stale motion: a one-use challenge is issued by
                 # this gateway with a 250ms expiry for every jog operation.
                 if msg["cmd"] == "jog":
@@ -156,13 +172,13 @@ async def websocket(ws: WebSocket):
                     if not isinstance(proof, dict) or proof.get("challenge") != challenge:
                         await rpc({"cmd": "release", "session": session})
                         continue
-                payload = {k: msg[k] for k in ("cmd", "axis", "velocity") if k in msg}
+                payload = {k: msg[k] for k in ("cmd", "axis", "velocity", "text") if k in msg}
                 payload["session"] = session
                 try:
                     response = await rpc(payload)
                 except Exception:
                     response = {"ok": False, "error": "Adapter unavailable"}
-                await emit({"type": "ack", "cmd": msg["cmd"], **response})
+                await acknowledge(msg, response)
         receiver = asyncio.create_task(receive())
         try:
             done, pending = await asyncio.wait({sender, receiver}, return_when=asyncio.FIRST_COMPLETED)

@@ -30,6 +30,7 @@ export function clearPreview() {setPreview([]);}
 const asPosition = p => ({X:p[0],Y:p[1],U:p[2],V:p[3]});
 function draw() {
   const rect = canvas.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
   const ratio = Math.min(devicePixelRatio || 1, 2);
   canvas.width = Math.max(1, Math.round(rect.width * ratio));
   canvas.height = Math.max(1, Math.round(rect.height * ratio));

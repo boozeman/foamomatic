@@ -219,3 +219,38 @@ Refresh the browser. Try examples/xyuv-preview.ngc in the preview form.
 Host dependencies gcode and rs274 are supplied by the LinuxCNC installation;
 they are not installed into Docker. Host-side interpreter integration still
 requires validation on the actual Debian installation.
+
+
+## Tabs and machine controls
+
+The status, toolpath/preview and MDI views are separate keyboard-accessible tabs.
+Machine On, Off, software ESTOP, ESTOP Reset and Abort remain above every tab.
+The browser now authenticates a control-capable session. Read-only API sessions
+remain supported. The browser emergency button is a network command, not a
+physical safety circuit.
+
+For MDI: enable the machine, home all four joints using LinuxCNC, select MDI mode
+in the MDI tab, wait for the status update, then submit one ASCII line (max 254
+bytes). The host rechecks ESTOP, enable, all homed, interpreter idle, pause state,
+jog activity and MODE_MDI. Switching to MDI and submitting a command are separate
+operations. A pending command serial prevents a second MDI before acknowledgement.
+The last 30 submissions are kept in browser memory; they are not auto-replayed.
+
+State-changing commands require a one-use token issued in a successful status
+sample, valid for one second at the gateway. Queued or stale commands are rejected.
+Off/Abort/ESTOP remain available during missing status and pending commands if
+the WebSocket is connected. Their requests are issued before best-effort jog-stop,
+so a failed jog-stop does not prevent ESTOP/Off/Abort.
+A command acknowledgement reports submission, not physical completion.
+If acknowledgement is missing, inspect machine status: commands are never retried.
+
+Disconnect stops a leased manual jog; it does not abort an already executing MDI
+or program. That behavior and the hardware-independent watchdog/heater integration
+remain separate commissioning work.
+
+Deploy with the machine idle:
+
+    sudo systemctl restart foamomatic-adapter
+    docker compose up -d --build --force-recreate
+
+Then hard-refresh the browser. Test first with a non-motion MDI such as G90.

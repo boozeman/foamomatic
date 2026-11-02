@@ -1,3 +1,5 @@
+import {createControls} from "./controls-ui.js";
+import "./tabs.js";
 import {setToken} from "./auth-state.mjs";
 import "./preview-ui.js";
 import {configureWire, updateWire, unavailableWire} from "./wire-view.js";
@@ -5,6 +7,22 @@ const byId = id => document.getElementById(id);
 const letters = ["X", "Y", "U", "V"];
 let socket = null, lastUpdate = 0, lastSample = null, connectedAt = 0, ready = false;
 let latest = null;
+let commandToken=null, sequence=0;
+const pending=new Map();
+const controls=createControls(sendCommand);
+function sendCommand(payload) {
+  if(!ready||socket?.readyState!==WebSocket.OPEN) return Promise.reject(new Error("Ei yhteyttä."));
+  const id=String(++sequence);
+  return new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>{
+      pending.delete(id);
+      reject(new Error("Kuittaus puuttuu. Komentoa ei uusita; tarkista koneen tila."));
+    },2000);
+    pending.set(id,{resolve,reject,timer});
+    socket.send(JSON.stringify({...payload,id,command_token:commandToken}));
+    commandToken=null;
+  });
+}
 const rows = {};
 for (const [i, axis] of letters.entries()) {
   const row = document.createElement("tr");
@@ -21,6 +39,7 @@ function connection(text, kind = "") {
 function clearValues() {
   unavailableWire();
   latest = null;
+  controls.update(null,false,ready);
   for (const axis of letters) for (const cell of rows[axis].slice(1)) cell.textContent = "—";
   for (const id of ["estop", "enabled", "mode", "program", "file", "line"]) byId(id).textContent = "—";
   byId("error").hidden = true;
@@ -48,9 +67,10 @@ function show(data) {
   lastUpdate = Date.now();
   latest = data;
   updateWire(data);
+  controls.update(data,true,ready);
   document.body.classList.remove("stale");
   connection("Yhteys kunnossa", "live");
-  byId("notice").textContent = "LinuxCNC:n tilatiedot päivittyvät. Näkymä ei lähetä ohjauskomentoja.";
+  byId("notice").textContent = "LinuxCNC:n tilatiedot päivittyvät.";
   letters.forEach((a, i) => {
     rows[a][1].textContent = format(data.machine[a]);
     rows[a][2].textContent = format(data.work[a]);
@@ -70,6 +90,11 @@ function show(data) {
 }
 function disconnect() {
   setToken("");
+  commandToken=null;
+  for(const request of pending.values()){
+    clearTimeout(request.timer);request.reject(new Error("Yhteys katkesi; komentoa ei uusita."));
+  }
+  pending.clear();
   const old = socket;
   socket = null; ready = false;
   if (old) old.close();
@@ -92,7 +117,7 @@ byId("login").addEventListener("submit", event => {
   byId("connect").disabled = true; byId("disconnect").disabled = false;
   ws.addEventListener("open", () => {
     if (socket !== ws) return;
-    ws.send(JSON.stringify({token, read_only: true}));
+    ws.send(JSON.stringify({token, read_only: false}));
     byId("token").value = "";
   });
   ws.addEventListener("message", event => {
@@ -100,7 +125,14 @@ byId("login").addEventListener("submit", event => {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === "ready") { ready = true; setToken(token); configureWire(msg.geometry); connection("Odotetaan tilatietoa"); }
+      if(msg.type==="ack"){
+        const request=pending.get(msg.id);
+        if(request){clearTimeout(request.timer);pending.delete(msg.id);
+          if(msg.ok)request.resolve(msg.data);else request.reject(new Error(msg.error||"Komento hylättiin."));
+        }
+      }
       if (msg.type === "status" && ready) {
+        commandToken=msg.command_token;
         if (msg.ok) show(msg.data);
         else invalid(msg.error || "LinuxCNC:n tilatietoa ei saada.");
       }
@@ -135,6 +167,7 @@ setInterval(() => {
   if (lastUpdate) {
     const age = (Date.now() - lastUpdate) / 1000;
     byId("updated").textContent = "Viimeisin tilapäivitys " + age.toFixed(1) + " s sitten";
+    controls.update(latest,age<=1&&!!latest,ready);
     if (age > 3 && latest) invalid("Tilatieto on vanhentunut. Odotetaan uutta päivitystä.");
   }
 }, 500);

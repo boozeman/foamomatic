@@ -23,6 +23,7 @@ class Controller:
         self.deadline = 0.0
         self.active = set()
         self.latest_error = None
+        self.mdi_pending_serial = None
 
     def poll(self):
         self.status.poll()
@@ -30,6 +31,10 @@ class Controller:
             raise ValueError("Expected exactly XYUV axes")
         if self.status.joints != 4:
             raise ValueError("Expected four joints: X,Y,U,V")
+        if (self.mdi_pending_serial is not None and
+                self.status.echo_serial_number >= self.mdi_pending_serial and
+                self.status.interp_state == self.api.INTERP_IDLE):
+            self.mdi_pending_serial = None
         return self.status
 
     def stop(self):
@@ -69,7 +74,7 @@ class Controller:
                 "homed": list(s.homed)[:4], "estop": bool(s.estop),
                 "enabled": bool(s.enabled), "task_mode": s.task_mode,
                 "interp_state": s.interp_state, "paused": bool(s.paused),
-                "line": s.motion_line, "file": s.file,
+                "line": s.motion_line, "file": s.file, "mdi_pending": self.mdi_pending_serial is not None,
                 "error": self.latest_error, "sample_monotonic": time.monotonic()}
 
     def execute(self, msg):
@@ -80,11 +85,15 @@ class Controller:
         if cmd == "status":
             return self.snapshot()
         if cmd in ("stop", "abort", "estop"):
-            self.stop()
-            if cmd == "abort":
-                self.command.abort()
-            elif cmd == "estop":
+            if cmd == "estop":
                 self.command.state(self.api.STATE_ESTOP)
+            elif cmd == "abort":
+                self.command.abort()
+            try:
+                self.stop()
+            except Exception:
+                if cmd == "stop":
+                    raise
             return {}
         if cmd == "release":
             if owner == self.owner:
@@ -95,16 +104,40 @@ class Controller:
             self.command.state(self.api.STATE_ESTOP_RESET)
             return {}
         if cmd == "disable":
-            self.stop()
             self.command.state(self.api.STATE_OFF)
+            try:
+                self.stop()
+            except Exception:
+                pass
             return {}
         if s.estop:
             raise ValueError("Machine is in ESTOP")
         if cmd == "enable":
+            if s.interp_state != self.api.INTERP_IDLE or self.active:
+                raise ValueError("Machine must be idle")
             self.command.state(self.api.STATE_ON)
             return {}
         if not s.enabled:
             raise ValueError("Machine is disabled")
+        if cmd in ("mdi_mode", "mdi"):
+            if (s.interp_state != self.api.INTERP_IDLE or s.paused or self.active or
+                    self.mdi_pending_serial is not None):
+                raise ValueError("Machine must be idle")
+            if len(s.homed) < 4 or not all(s.homed[:4]):
+                raise ValueError("Home all four joints before MDI")
+            if cmd == "mdi_mode":
+                self.command.mode(self.api.MODE_MDI)
+                return {}
+            if s.task_mode != self.api.MODE_MDI:
+                raise ValueError("Select MDI mode and wait for status confirmation")
+            text = msg.get("text")
+            if not isinstance(text, str) or not text.strip():
+                raise ValueError("MDI requires one nonempty line")
+            if len(text.encode("utf-8")) > 254 or any(ord(c) < 32 or ord(c) > 126 for c in text):
+                raise ValueError("MDI must be one ASCII line, at most 254 bytes")
+            self.command.mdi(text.strip())
+            self.mdi_pending_serial = self.command.serial
+            return {}
         if cmd in ("home_all", "jog"):
             if s.task_mode != self.api.MODE_MANUAL or s.interp_state != self.api.INTERP_IDLE:
                 raise ValueError("Select MANUAL and idle first")
