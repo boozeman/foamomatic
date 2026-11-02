@@ -1,3 +1,5 @@
+import {getProgram,onProgram} from "./program-state.mjs";
+import {locateProgress,interpolate,matchesProgram} from "./preview-progress.mjs";
 import {endpoints, changed, project} from "./wire-geometry.mjs";
 const canvas = document.getElementById("wire-view");
 const ctx = canvas.getContext("2d");
@@ -6,9 +8,22 @@ let config = {width_mm:1000, horizontal_max_mm:710, vertical_max_mm:260};
 let position = null, last = null, trails = [], live = false, gap = true;
 let yaw = -0.65, pitch = 0.42, dragging = null, previous = null, lastTime = 0;
 const LIMIT = 2000;
-let preview = [], previewStep = 0;
+let preview = [], previewStep = 0, executionCursor = null;
+const follow = document.getElementById("follow-program");
+const followStatus = document.getElementById("follow-status");
+function followLabel(text){
+  followStatus.textContent=text??(follow.checked?"Waiting for program":"Manual preview");
+}
+onProgram(()=>{executionCursor=null;followLabel();draw();});
+follow.addEventListener("change",()=>{
+  if(follow.checked&&executionCursor){previewStep=executionCursor.index;slider.value=String(previewStep);}
+  followLabel(follow.checked&&executionCursor?"Following execution":null);
+  updatePreviewLabel();draw();
+});
 const slider = document.getElementById("preview-step");
 slider.addEventListener("input", () => {
+  follow.checked=false;
+  followLabel();
   previewStep = Number(slider.value); updatePreviewLabel(); draw();
 });
 function updatePreviewLabel() {
@@ -22,8 +37,9 @@ export function setPreview(segments) {
         [s.start,s.end].every(p=>Array.isArray(p)&&p.length===4&&p.every(Number.isFinite)))) {
     throw new Error("Invalid preview coordinates.");
   }
-  preview=segments;previewStep=Math.max(0,segments.length-1);
-  slider.max=String(previewStep);slider.value=String(previewStep);
+  preview=segments;previewStep=0;executionCursor=null;
+  follow.checked=true;follow.disabled=!segments.length;followLabel();
+  slider.max=String(Math.max(0,segments.length-1));slider.value=String(previewStep);
   slider.disabled=!segments.length;updatePreviewLabel();draw();
 }
 export function clearPreview() {setPreview([]);}
@@ -55,19 +71,32 @@ function draw() {
     for(let z=100;z<zmax;z+=100)path([[0,y,z],[xmax,y,z]],"#263d37");
   }
   for(const x of [0,xmax])path([[x,0,0],[x,span,0]],"#344c45");
-  for(const segment of preview) {
-    const a=endpoints(asPosition(segment.start),span),b=endpoints(asPosition(segment.end),span);
-    if(segment.kind==="feed"){
-      path([a[0],a[1],b[1],b[0]],"rgba(120,160,240,.1)",1,"rgba(110,150,235,.04)");
+  function previewSegment(start,end,kind,completed){
+    const a=endpoints(asPosition(start),span),b=endpoints(asPosition(end),span);
+    if(kind==="feed"){
+      path([a[0],a[1],b[1],b[0]],completed?"rgba(100,220,170,.16)":"rgba(120,160,240,.1)",1,
+        completed?"rgba(80,205,150,.12)":"rgba(110,150,235,.04)");
     }
-    ctx.setLineDash(segment.kind==="rapid"?[4,5]:[]);
-    path([a[0],b[0]],segment.kind==="rapid"?"#bf8960":"#89b8f1",1.2);
-    path([a[1],b[1]],segment.kind==="rapid"?"#bf8960":"#b8a4ef",1.2);
+    ctx.setLineDash(kind==="rapid"?[4,5]:[]);
+    path([a[0],b[0]],completed?"#5fd7a5":kind==="rapid"?"#bf8960":"#89b8f1",completed?2:1.2);
+    path([a[1],b[1]],completed?"#5fd7a5":kind==="rapid"?"#bf8960":"#b8a4ef",completed?2:1.2);
     ctx.setLineDash([]);
+  }
+  for(const [index,segment] of preview.entries()){
+    if(executionCursor&&index===executionCursor.index){
+      const middle=interpolate(segment.start,segment.end,executionCursor.fraction);
+      if(executionCursor.fraction>0)previewSegment(segment.start,middle,segment.kind,true);
+      if(executionCursor.fraction<1)previewSegment(middle,segment.end,segment.kind,false);
+    }else{
+      previewSegment(segment.start,segment.end,segment.kind,!!executionCursor&&index<executionCursor.index);
+    }
   }
   const selected=preview[previewStep];
   if(selected){
-    path(endpoints(asPosition(selected.end),span),"#b8a4ef",2);
+    const marker=follow.checked
+      ? executionCursor?interpolate(selected.start,selected.end,executionCursor.fraction):selected.start
+      : selected.end;
+    path(endpoints(asPosition(marker),span),"#b8a4ef",2);
   }
   for(const segment of trails) {
     const a=endpoints(segment[0],span),b=endpoints(segment[1],span);
@@ -109,6 +138,14 @@ export function configureWire(value){
 export function updateWire(data){
   const p=data.machine;
   if(!p || !["X","Y","U","V"].every(k=>Number.isFinite(p[k])))return unavailableWire();
+  if(preview.length&&matchesProgram(data,getProgram()?.id)){
+    const cursor=locateProgress(preview,data.source_line,p,executionCursor);
+    if(cursor){
+      executionCursor=cursor;
+      if(follow.checked){previewStep=cursor.index;slider.value=String(previewStep);updatePreviewLabel();}
+      followLabel((follow.checked?"Following":"Manual preview · running")+" line "+data.source_line);
+    }
+  }else followLabel();
   const now=performance.now();
   const signature=JSON.stringify([data.homed,data.file]);
   if(signature!==previous || now-lastTime>1500)gap=true;
@@ -125,6 +162,7 @@ export function updateWire(data){
   draw();
 }
 export function unavailableWire(){
+  followLabel("No fresh run status");
   live=false;gap=true;last=null;note.textContent="Live wire hidden: no fresh status.";draw();
 }
 draw();

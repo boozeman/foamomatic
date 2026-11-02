@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Foamomatic · Machine status</title>
-<link rel="stylesheet" href="/assets/status.css?v=11">
-<script type="module" src="/assets/status.js?v=11"></script>
+<link rel="stylesheet" href="/assets/status.css?v=12">
+<script type="module" src="/assets/status.js?v=12"></script>
 </head>
 <body>
 <header class="app-header">
@@ -27,13 +27,13 @@
 </nav>
 <section id="panel-preview" role="tabpanel" aria-labelledby="tab-preview" hidden>
 <section class="wire-panel" aria-label="XYUV wire visualization">
-<div class="panel-heading"><div><h2>Wire and observed toolpaths</h2><p id="wire-size" class="muted small">1000 mm · nominal width</p></div><div class="view-actions"><button id="reset-view" class="secondary" type="button">Reset view</button><button id="clear-trail" class="secondary" type="button">Clear trail</button></div></div>
+<div class="panel-heading"><div><h2>Wire and observed toolpaths</h2><p id="wire-size" class="muted small">1000 mm · nominal width</p></div><div class="view-actions"><label class="follow-control"><input id="follow-program" type="checkbox" checked disabled>Follow program</label><button id="reset-view" class="secondary" type="button">Reset view</button><button id="clear-trail" class="secondary" type="button">Clear trail</button></div></div>
 <div class="preview-sidebar">
 <form id="preview-form" class="preview-form"><fieldset id="preview-operations">
 <label for="preview-file">G-code preview</label>
 <div class="login-row"><input id="preview-file" type="file" accept=".ngc,.nc,.tap,.gcode,.txt"><button id="preview-load" type="submit">Preview</button><button id="preview-clear" type="button" class="secondary">Clear preview</button></div>
 <p id="preview-message" class="muted small" role="status">G0/G1 · up to 256 KiB. Preview does not start the machine.</p>
-<label for="preview-step">Preview position <span id="preview-line">No preview</span></label><input id="preview-step" type="range" min="0" max="0" value="0" disabled></fieldset>
+</fieldset><label for="preview-step">Preview position <span id="preview-line">No preview</span></label><input id="preview-step" type="range" min="0" max="0" value="0" disabled>
 </form>
 </div>
 <canvas id="wire-view" aria-label="Rotatable XYUV view with wire endpoints and a straight wire"></canvas>
@@ -44,7 +44,7 @@
 <p id="program-progress" class="muted small" role="status">No fresh execution status.</p>
 <details class="compact-help"><summary>About program execution</summary><p>LinuxCNC runs the program locally. Losing the browser connection does not stop execution. Preview again after changing the starting position or coordinate system.</p></details>
 </section>
-<div class="wire-caption"><p id="wire-note" class="small muted">Waiting for fresh status.</p><details class="compact-help"><summary>Drag to rotate · About this view</summary><p>The trail records this browser session only. The surface shows sampled movement; heating is not modeled. The nominal display minimum is 0 mm.</p></details></div>
+<div class="wire-caption"><div class="wire-meta"><p id="wire-note" class="small muted">Waiting for fresh status.</p><p id="follow-status" class="small muted" role="status">Waiting for program</p></div><details class="compact-help"><summary>Drag to rotate · About this view</summary><p>The trail records this browser session only. Completed preview moves are green; upcoming moves remain blue or dashed orange. Follow program tracks the executing source line and estimated progress from XYUV positions. Moving the slider switches to manual preview. Heating is not modeled. The nominal display minimum is 0 mm.</p></details></div>
 </section>
 </section>
 <section id="panel-status" role="tabpanel" aria-labelledby="tab-status">

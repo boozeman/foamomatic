@@ -1,6 +1,6 @@
 import {setProgram} from "./program-state.mjs";
 import {getToken} from "./auth-state.mjs";
-import {setPreview, clearPreview} from "./wire-view.js?v=11";
+import {setPreview, clearPreview} from "./wire-view.js?v=12";
 const form=document.getElementById("preview-form");
 const input=document.getElementById("preview-file");
 const message=document.getElementById("preview-message");

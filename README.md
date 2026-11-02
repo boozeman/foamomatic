@@ -1,5 +1,34 @@
 # Foamomatic
 
+## DISCLAIMER — PROOF OF CONCEPT
+
+**Foamomatic is experimental Proof of Concept software. It is not production-ready
+and is not a certified machine-safety system. Use it entirely at your own risk.**
+
+This software can control machinery, motion and connected equipment. Incorrect
+configuration, software defects, communication failures or misuse can cause
+unexpected movement, fire, equipment damage, serious injury or death.
+
+To the fullest extent permitted by applicable law, the software is provided
+**"AS IS", WITHOUT ANY WARRANTY**, express or implied, including warranties of
+merchantability, fitness for a particular purpose, accuracy, reliability or safety.
+The authors, copyright holders and contributors accept no responsibility or
+liability for any claims, losses, damage, injury, death or other consequences
+arising from installing, configuring, using, modifying or distributing the software,
+or from being unable to use it. This includes direct, indirect, incidental,
+special and consequential damages.
+
+You are solely responsible for assessing suitability, reviewing and validating the
+software and configuration, testing on your own equipment, providing appropriate
+physical emergency stops, interlocks and independent safeguards, and complying
+with applicable requirements. Browser controls, network commands and software
+watchdogs do not replace physical machine-safety systems.
+
+No guarantee of maintenance, support, updates or continued availability is made.
+Nothing in this disclaimer excludes liability that cannot lawfully be excluded.
+The warranty and liability provisions in Sections 15–17 of the GNU GPL version 3
+also apply.
+
 XYUV-only LinuxCNC adapter and container gateway. Initial backend foundation;
 includes browser status, XYUV toolpath and G-code preview, MDI and machine state controls. Program execution controls, heater controls and hardware watchdog integration are not implemented yet.
 Not commissioned for operating a physical machine.
@@ -340,3 +369,34 @@ adapter/systemd service does not need restarting.
 English is the project language for the interface, status messages, accessibility
 labels, documentation, and tests. Messages forwarded directly from LinuxCNC retain
 the language configured on the host.
+
+
+## Follow program execution
+
+Follow program is enabled by default for each newly loaded preview.
+Only status whose loaded/running program IDs match that preview can advance it.
+The executing source_line (mapped from motion_line, not interpreter read-ahead)
+selects the current segment. Projection of the live XYUV coordinates onto that
+segment estimates progress within a long G1 move, including G93 programs.
+Completed preview segments/surfaces are green; future paths retain their
+blue/purple or dashed-orange colors. The white wire still shows the actual
+sampled machine position.
+
+Dragging the preview slider switches to manual inspection; checking Follow
+program returns to the live segment. Manual inspection does not change machine
+operation. Pause/M0 retain the current progress. Missing or stale status freezes
+the progress rather than advancing a browser animation. Updates follow the
+existing 5 Hz telemetry; very short moves can be skipped between samples.
+The nominal mm-coordinate assumptions and preview limitations still apply.
+
+Only a gateway image rebuild and browser refresh are needed; the host adapter
+already supplies the source-line and program-identity fields.
+
+
+## License
+
+Foamomatic is licensed under the **GNU General Public License, version 3 only**
+(`GPL-3.0-only`). See [LICENSE](LICENSE) for the complete license text, including
+the terms for copying, modification and distribution.
+
+Third-party dependencies remain subject to their respective licenses.
