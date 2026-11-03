@@ -1,0 +1,13 @@
+[Unit]
+Description=Foamomatic Mesa-triggered LinuxCNC desktop launcher
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=@PROJECT_ROOT@
+ExecStart=/usr/bin/python3 -B -u @PROJECT_ROOT@/deploy/linuxcnc_launcher.py --config "%h/.config/foamomatic/linuxcnc.json"
+Restart=no
+KillMode=mixed
+TimeoutStopSec=30
+Environment=PYTHONDONTWRITEBYTECODE=1
+# Do not use NoNewPrivileges: LinuxCNC may need privileged realtime helpers.

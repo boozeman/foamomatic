@@ -68,6 +68,8 @@ wire length or a measured distance between the towers.
 
 LinuxCNC and the gateway run on the same Debian host. LinuxCNC remains responsible
 for real-time motion and the Mesa interface; Docker serves the browser application.
+An optional desktop-session host service waits for the Mesa card and launches
+LinuxCNC with the selected INI, keeping AXIS available on the server desktop.
 
 ```text
 Desktop / tablet browser
@@ -174,10 +176,10 @@ Verify that the host's system Python can import the LinuxCNC modules:
 
 These modules come from the LinuxCNC installation, not `pip` or the container.
 
-### 3. Start LinuxCNC and install the host adapter
+### 3. Install the host adapter
 
-Start LinuxCNC with your XYUV configuration and leave the machine idle.
-Install the adapter service from the repository root:
+Leave the machine idle during installation. Install the adapter service from
+the repository root (LinuxCNC can be started manually or by the launcher below):
 
 ```sh
 sudo python3 deploy/install_systemd.py --user "$(id -un)"
@@ -187,14 +189,80 @@ journalctl -u foamomatic-adapter -n 50 --no-pager
 
 The installer checks Python imports as the operator, validates and installs the
 systemd unit, and enables/starts the service. It prints the numeric UID/GID needed
-in the next step. Do not copy the service template directly or run a second
+in the gateway configuration step. Do not copy the service template directly or run a second
 manual adapter alongside the service.
 
 The adapter requires exactly one running `linuxcncsvr` process. If LinuxCNC is
 not running yet, systemd retries every five seconds. After LinuxCNC starts,
 confirm that `/run/foamomatic/adapter.sock` exists before starting the container.
 
-### 4. Configure the gateway and LAN access
+### 4. Set up Mesa-triggered LinuxCNC startup (optional)
+
+This launcher keeps `[DISPLAY] DISPLAY = axis` in your existing INI. It starts
+LinuxCNC in the operator's desktop session when the controller is powered on and
+the configured Mesa IPv4 address responds to ping. AXIS remains accessible on
+that desktop; Foamomatic connects through the existing adapter.
+
+Log into the server's graphical desktop as the LinuxCNC operator. In a terminal
+there, run the installer **without sudo**, replacing the INI path and Mesa IP:
+
+```sh
+sudo apt-get install iputils-ping
+python3 deploy/install_linuxcnc_launcher.py \
+  --ini "$HOME/linuxcnc/configs/foamcutter/foamcutter.ini" \
+  --mesa-ip 10.10.10.10
+python3 deploy/install_linuxcnc_launcher.py --session-start
+systemctl --user status foamomatic-linuxcnc --no-pager
+```
+
+Use the actual card address from your HAL configuration, on the dedicated Mesa
+interface. The address must respond to ICMP ping. Two consecutive successful
+probes, approximately two seconds apart, trigger startup. This is a reachability
+check, not verification of firmware, HAL readiness or drive power; LinuxCNC
+performs its own hardware initialization. No ping probes are sent while the
+launched LinuxCNC process is running.
+
+The installer creates these files under the operator's home directory:
+
+- `~/.config/foamomatic/linuxcnc.json`: selected INI, Mesa address and executable paths.
+- `~/.config/systemd/user/foamomatic-linuxcnc.service`: user service.
+- `~/.config/autostart/foamomatic-linuxcnc.desktop`: desktop-login startup entry.
+
+The desktop startup entry imports the session's display credentials into the
+user service manager. Do not enable this unit as a boot-time system service or
+use `sudo systemctl` for it. **A logged-in graphical desktop is required for
+AXIS.** For unattended startup after reboot, configure desktop automatic login
+for the operator separately; enabling user lingering alone does not create a
+graphical session. Logging out or stopping the service can shut down LinuxCNC,
+so do either only while the machine is idle.
+
+Normal startup order is: boot Debian, log into the desktop (manually or through
+auto-login), then turn on the controller using its physical button. It also
+works if the controller is already powered when the desktop session starts.
+The launcher does not enable the machine, reset ESTOP, home or start a program.
+
+Closing AXIS or a failed LinuxCNC startup leaves the launcher waiting; it does
+not repeatedly reopen windows. Once LinuxCNC has exited, three failed probes
+followed by two successful probes allow another launch. Alternatively, while
+idle, explicitly retry with `systemctl --user restart foamomatic-linuxcnc`.
+A brief network interruption never tells this launcher to stop LinuxCNC.
+
+An existing LinuxCNC process or `/tmp/linuxcnc.lock` blocks a second launch,
+including an instance using a different INI. The launcher never deletes locks
+or replaces an existing instance. Before manually launching LinuxCNC for
+maintenance, stop the launcher while idle:
+
+```sh
+systemctl --user stop foamomatic-linuxcnc
+```
+
+To change the configured INI/IP, stop the service, rerun the installer with the
+new arguments, then run `--session-start` again. To remove automatic startup,
+stop the service and remove the three generated files listed above, then run
+`systemctl --user daemon-reload`. Manual LinuxCNC startup remains supported
+when this optional launcher is not installed.
+
+### 5. Configure the gateway and LAN access
 
 Create your local configuration and generate a connection key:
 
@@ -237,7 +305,7 @@ The three `FOAM_VIEW_*` values only set visualization bounds. Configure actual
 travel limits in LinuxCNC. The visualization assumes millimetres. No Docker volume
 is needed for these settings: they persist in the host's `.env` file.
 
-### 5. Build and start the container
+### 6. Build and start the container
 
 From the repository root, after the adapter socket is available:
 
@@ -253,14 +321,16 @@ storage. Verify that live machine status appears; `/health` only checks the
 gateway process, not the adapter or LinuxCNC connection.
 
 The supplied Compose file uses `restart: "no"`, so the gateway does not
-start automatically after a host reboot. Start LinuxCNC and wait for the adapter
+start automatically after a host reboot. Power on the controller and let the
+desktop launcher start LinuxCNC (or start it manually), wait for the adapter
 socket, then run `docker compose up -d`. `/run` is recreated on reboot: if the
 container started before the adapter directory was ready, recreate it with
 `docker compose up -d --force-recreate` after the socket becomes available.
 
 ## Using Foamomatic
 
-1. Connect and check the machine state. Reset software ESTOP and enable the
+1. Log into the server desktop and power on the controller. Wait for LinuxCNC
+   and adapter status, then connect and check the machine state. Reset software ESTOP and enable the
    machine when appropriate for your machine's operating procedure.
 2. Select Manual mode and home X/Y/U/V individually or use Home All. LinuxCNC's
    INI/HAL configuration defines the actual homing motion and sequencing.
@@ -303,7 +373,11 @@ docker compose up -d --build --force-recreate
 
 Reload the browser after updating. Adapter-only changes require a service
 restart; gateway/UI changes require an image rebuild. Rerun the systemd installer
-if the unit, checkout path or operator account changes.
+if the unit, checkout path or operator account changes. If the optional launcher
+is installed, stop it before maintenance and restart it afterwards with
+`systemctl --user restart foamomatic-linuxcnc`. Launcher source changes need a
+user-service restart; template changes require rerunning its installer. Stopping
+the launcher also shuts down the LinuxCNC instance it started.
 
 Useful diagnostics:
 
@@ -311,6 +385,9 @@ Useful diagnostics:
 systemctl status foamomatic-adapter --no-pager
 journalctl -u foamomatic-adapter -f
 docker compose logs --tail=100 gateway
+# Optional desktop launcher (run as the operator, without sudo):
+systemctl --user status foamomatic-linuxcnc --no-pager
+journalctl --user -u foamomatic-linuxcnc -f
 ```
 
 | Symptom | Check |
@@ -319,11 +396,14 @@ docker compose logs --tail=100 gateway
 | Connection is rejected | `FOAM_TOKEN` and the exact browser origin in `FOAM_ORIGINS`. |
 | Gateway is healthy but status is unavailable | LinuxCNC, adapter logs, socket directory mount and matching UID/GID. |
 | MDI or Run is disabled | Machine enable, ESTOP, all four homed joints, fresh status and interpreter state. |
+| AXIS does not start automatically | Desktop login, launcher user-service logs, configured INI/IP, ping response and an existing LinuxCNC lock/instance. |
 | UI looks outdated | Rebuild the gateway and hard-refresh the browser. |
 
 The adapter detects LinuxCNC shutdown/restart using process identity and channel
 health. It exits on a lost connection, and systemd retries every five seconds.
-It does not restart LinuxCNC, enable the machine, home axes or resume commands.
+The adapter itself does not restart LinuxCNC, enable the machine, home axes or
+resume commands. The separate optional desktop launcher handles Mesa-triggered
+LinuxCNC startup as described in installation step 4.
 With the browser connection still open, status recovers through the existing
 gateway without a Docker restart. Preview again before starting a new program.
 This connection supervisor is separate from a hardware machine-safety watchdog.
