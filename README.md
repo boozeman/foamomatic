@@ -29,11 +29,25 @@ Nothing in this disclaimer excludes liability that cannot lawfully be excluded.
 The warranty and liability provisions in Sections 15–17 of the GNU GPL version 3
 also apply.
 
-XYUV-only LinuxCNC adapter and container gateway. Initial backend foundation;
-includes browser status, XYUV toolpath and G-code preview, MDI and machine state controls. Program execution controls, heater controls and hardware watchdog integration are not implemented yet.
-Not commissioned for operating a physical machine.
+## What is Foamomatic?
 
-## Some pictures
+Foamomatic is an experimental web interface for a LinuxCNC-controlled XYUV
+hot-wire foam cutter. It provides machine status, homing, MDI commands, G-code
+preview and program execution from a desktop or tablet browser.
+
+The interface is designed for two independently moving wire endpoints:
+
+| Wire endpoint | Horizontal axis | Vertical axis |
+| --- | --- | --- |
+| Left | X | Y |
+| Right | U | V |
+
+The visualization connects those endpoints with a straight wire and displays
+the surfaces swept by XYUV moves. Wire sag, stretch and tension are not modeled.
+The default 1000 mm display width represents usable stock width, not a fixed
+wire length or a measured distance between the towers.
+
+### Screenshots
 
 <table border='0'>
 <tr>
@@ -44,365 +58,290 @@ Not commissioned for operating a physical machine.
 </tr>
 </table>
 
-## Deployment architecture
-
-Run LinuxCNC, its real-time Mesa driver and this small Python adapter on the
-Debian host. Run the gateway in Docker on the same host. Dedicate one physical
-Ethernet interface to Mesa, and another to operator LAN traffic. Do not bridge
-Docker or route browser traffic through the Mesa interface.
-
-The browser never streams step pulses or G-code line-by-line. In a future program
-runner, upload the complete program before starting; LinuxCNC must execute it
-locally. Gateway telemetry is 5 Hz, with no history queue. Rendering should use
-the latest snapshot. Low bandwidth affects display freshness, not motion timing.
-High latency deliberately prevents continuous remote jogging.
-
-## Coordinates
-
-Left endpoint is X horizontal, Y vertical. Right endpoint is U horizontal,
-V vertical. LinuxCNC axis indices are 0,1,6,7; joint indices are separately
-0,1,2,3, in that configured trivkins order. Configure exactly four XYUV joints.
-Position/offset calculations use coordinate vectors, not joint vectors.
-
-Wire visualization will use a straight segment between two tower planes;
-tower distance and stock placement must be configured. A 3kg weight maintains
-tension; no sag, stretch, or fixed-length constraint is modeled.
-
-## Host installation
-
-Use the Debian system Python that imports linuxcnc, not a new venv.
-Run these commands on the Debian host from the foamomatic checkout, as the
-same regular user who runs LinuxCNC.
-
-1. With the machine idle, stop the manually started adapter with Ctrl+C.
-2. Install and enable the service:
-
-       sudo python3 deploy/install_systemd.py --user "$(id -un)"
-
-The installer verifies LinuxCNC imports as that user, validates the generated
-unit, installs it under /etc/systemd/system, and enables/restarts it.
-The installed unit uses this checkout's absolute path and the operator's
-numeric UID/GID. Keep the checkout in place; no /opt copy or venv is required.
-The template deploy/foamomatic-adapter.service must be rendered by the installer,
-not copied directly.
-
-3. Set FOAM_UID and FOAM_GID in .env to the values printed by the installer.
-4. Recreate the gateway to refresh its runtime-directory bind mount:
-
-       docker compose up -d --force-recreate
-
-Check service status and logs:
-
-    systemctl status foamomatic-adapter --no-pager
-    journalctl -u foamomatic-adapter -n 50 --no-pager
-
-Service management:
-
-    sudo systemctl restart foamomatic-adapter
-    sudo systemctl stop foamomatic-adapter
-    sudo systemctl disable --now foamomatic-adapter
-
-Only stop/restart the adapter while the machine is idle. It does not resume
-motion commands after restart. After adapter code updates, restart the service;
-the installer need only be rerun when its unit, checkout path or user changes.
-
-The service starts on boot and retries failures every five seconds, including
-a failed LinuxCNC connection during startup. LinuxCNC itself must still be
-started separately with the validated XYUV INI/HAL configuration. Do not launch
-a second manual adapter while the service is active.
-
-RuntimeDirectoryPreserve=yes retains /run/foamomatic across service stops so
-Docker keeps seeing the same directory. The socket is recreated inside it.
-The /run directory is recreated at host reboot: start the adapter before the
-gateway. If the gateway was started first, recreate it after the adapter starts.
-No systemd sandbox option that hides LinuxCNC's shared memory or temporary
-files is enabled. /health checks only the gateway, not LinuxCNC readiness.
-
-## Container
-
-Copy .env.example to .env. Set a strong random FOAM_TOKEN, matching UID/GID and
-exact browser origin(s), comma separated. For LAN access set FOAM_BIND_IP to the
-host's operator-LAN IP. Use TLS/WSS through a reverse proxy for untrusted networks.
-Do not set the bind IP to the Mesa interface.
-
-    docker compose up --build
-
-No privileged container, host PID/IPC sharing or LinuxCNC libraries in the image.
-The host Unix socket directory is the only machine connection.
-The CPU limit is an initial resource bound, not a real-time guarantee.
-Run LinuxCNC latency tests under expected container/network load before deployment;
-avoid image builds during cutting.
-
-GET /health checks the gateway process only, not LinuxCNC readiness.
-Connect to /ws with an allowed Origin. Within three seconds send:
-
-    {"token":"your-token"}
-
-Wait for ready. Commands are JSON objects with cmd. Supported commands:
-manual, reset_estop, enable, disable, home_all, world, jog, stop, abort,
-estop, pause. Commands acknowledge submission, not completed motion.
-Inspect subsequent status before the next state transition.
-Home in MANUAL, wait for all homed, then request world before jogging.
-
-Jog: send {"cmd":"jog","axis":"U","velocity":1}. Velocity is in machine
-units/second (default adapter cap 5; change --max-jog if needed).
-The server returns jog_challenge. Reply immediately with
-{"challenge":"the-returned-value"}. This proof expires after 250ms and is one-use.
-While a physical/dead-man UI input remains held, repeat jog every 100ms,
-waiting for each challenge/ack cycle. Never acknowledge a challenge after release.
-On release/focus loss send stop. One axis at a time is supported initially.
-Ordinary status traffic never renews a movement lease.
-
-The host stops all four coordinate axes when the 400ms jog lease expires,
-checked every 20ms. These are software scheduling targets, not hard real-time
-bounds. Network latency plus stopping distance must be considered when setting
-the jog speed. Stale queued jog requests require a fresh round trip before motion.
-There is no automatic reconnect/retry of motion commands.
-
-Disconnect releases that session's jog. Abort/stop/estop are available to every
-authenticated session; only one session can jog. Loss of browser connection
-does not currently abort an automatic program; run/resume are not exposed yet.
-That policy, heater behavior, and host-independent HAL watchdog remain explicit
-commissioning work. Browser E-stop is not a replacement for physical E-stop.
-
-## Verification
-
-    python -m unittest discover -s tests -v
-
-Unit tests use a fake LinuxCNC API to check sparse UV coordinate mapping,
-offsets, lease expiry, competing sessions, wrong geometry and jog validation.
-Real LinuxCNC, Docker build and Mesa operation need Debian-host verification.
-
-
-## Browser status page
-
-Rebuild the gateway image after pulling these changes:
-
-    docker compose up -d --build
-
-Open http://linuxcnc.local:8080 and enter the FOAM_TOKEN from your .env.
-FOAM_ORIGINS must include exactly http://linuxcnc.local:8080.
-The token is used in memory for this connection; it is not saved to browser
-storage or embedded in the served files. Click Connect again after a disconnect.
-
-The page requests a read-only WebSocket session, which the server prevents from
-sending control commands. It shows machine/work coordinates, homing state,
-ESTOP, enable, mode, program state and the latest LinuxCNC error.
-Coordinates use the machine's configured units; the adapter does not yet expose
-a unit label. Numbers below half a displayed decimal step render as zero.
-The browser also includes XYUV geometry and machine controls; see the later sections for current behavior.
-
-Status older than three seconds, unavailable adapter data, or a closed connection
-clears the live values. Browser reconnection is manual. /health remains a
-gateway-only liveness check.
-
-Additional HTTP/WebSocket tests (fake adapter only):
-
-    python -m pip install -r requirements.txt httpx
-    python -m unittest discover -s tests -v
-
-
-## XYUV visualization
-
-The browser draws two parallel endpoint planes and a straight wire between
-(X,Y) and (U,V). The nominal display width is 1000 mm, horizontal range 0..710 mm,
-and vertical range 0..260 mm. These are visual reference bounds, NOT LinuxCNC
-travel limits or measured tower spacing. Positions are shown without clamping.
-This initial visualization assumes machine coordinates are in mm.
-
-Configure FOAM_VIEW_WIDTH_MM, FOAM_VIEW_HORIZONTAL_MAX_MM and
-FOAM_VIEW_VERTICAL_MAX_MM in .env (defaults 1000, 710, 260). If you maintain a
-separate Compose file, add these names to the gateway environment mapping.
-No volume is needed: .env on the host supplies persistent configuration.
-After changes rebuild/recreate the gateway.
-
-Drag the canvas to rotate. Clear Trail resets the local observation history;
-Reset View restores the viewing angle. At most 2000 moving sample segments
-are retained in browser memory. The current wire disappears on stale data.
-A connection gap, >1.5 second sampling gap, homing-state or program-file change
-breaks the trail. Page reload discards it. All observed movement is included:
-heater state is not available. At 5 Hz, lines between samples are approximate;
-this is not a G-code preview or proof of the physical cut surface.
-
-Geometry checks: node tests/test_wire_geometry.mjs
-
-
-## G-code preview
-
-Upload a UTF-8 .ngc/.nc file using the browser's preview form after connecting.
-The authenticated POST /preview sends at most 256 KiB to the host adapter.
-The adapter invokes LinuxCNC's gcode.parse in a separate, time-limited process;
-it never calls linuxcnc.command, opens a run program, or changes machine files.
-Temporary uploaded files and a private parameter-file copy are deleted afterwards.
-No persistent volume is needed for preview uploads.
-
-G0/G1 paths use all four XYUV coordinates. G0 is dashed orange; G1 endpoints and
-their swept surface are blue/purple. A slider selects the preview wire's position
-and source line, independently of the live wire. Preview is limited to 12000
-segments and 20 seconds of interpretation. Errors discard the entire preview.
-
-LinuxCNC must be running and idle. The starting point, active WCS/G92 offsets
-and XY rotation are captured at upload time. Output is in machine coordinates,
-converted to mm. Re-upload after changing offsets or the intended starting
-position. Inactive WCS parameters come from the disk parameter file and may
-be stale. The standard interpreter is used, without machine-specific remaps,
-INI startup code or external subroutine paths. G2/G3, probing, rigid tapping and
-nonzero tool offsets are explicitly unsupported. Heater M codes are not executed
-or simulated. This preview does not validate machine travel limits.
-
-After updating: restart the host adapter (machine idle) and rebuild the gateway:
-
-    sudo systemctl restart foamomatic-adapter
-    docker compose up -d --build --force-recreate
-
-Refresh the browser. Try examples/xyuv-preview.ngc in the preview form.
-Host dependencies gcode and rs274 are supplied by the LinuxCNC installation;
-they are not installed into Docker. Host-side interpreter integration still
-requires validation on the actual Debian installation.
-
-
-## Tabs and machine controls
-
-The status, toolpath/preview and MDI views are separate keyboard-accessible tabs.
-Machine On, Off, software ESTOP, ESTOP Reset and Abort remain above every tab.
-The browser now authenticates a control-capable session. Read-only API sessions
-remain supported. The browser emergency button is a network command, not a
-physical safety circuit.
-
-For MDI: enable the machine, home all four joints using LinuxCNC, select MDI mode
-in the MDI tab, wait for the status update, then submit one ASCII line (max 254
-bytes). The host rechecks ESTOP, enable, all homed, interpreter idle, pause state,
-jog activity and MODE_MDI. Switching to MDI and submitting a command are separate
-operations. A pending command serial prevents a second MDI before acknowledgement.
-The last 30 submissions are kept in browser memory; they are not auto-replayed.
-
-State-changing commands require a one-use token issued in a successful status
-sample, valid for one second at the gateway. Queued or stale commands are rejected.
-Off/Abort/ESTOP remain available during missing status and pending commands if
-the WebSocket is connected. Their requests are issued before best-effort jog-stop,
-so a failed jog-stop does not prevent ESTOP/Off/Abort.
-A command acknowledgement reports submission, not physical completion.
-If acknowledgement is missing, inspect machine status: commands are never retried.
-
-Disconnect stops a leased manual jog; it does not abort an already executing MDI
-or program. That behavior and the hardware-independent watchdog/heater integration
-remain separate commissioning work.
-
-Deploy with the machine idle:
-
-    sudo systemctl restart foamomatic-adapter
-    docker compose up -d --build --force-recreate
-
-Then hard-refresh the browser. Test first with a non-motion MDI such as G90.
-
-
-Individual homing is available in the Machine Status tab (X/Y/U/V and Home All).
-Select Manual mode first. Homing requires enable, no ESTOP, idle interpreter and
-no other active homing/jog/MDI. Axis letters map to joints X=0,Y=1,U=2,V=3,
-not the coordinate indices 0,1,6,7. LinuxCNC INI/HAL defines actual homing motion
-and any grouped/synchronized homing restrictions. MDI help lists unhomed axes;
-the mode button reads MDI active when mode 3 is already selected.
-
-
-The MDI tab includes a collapsible touch keyboard: G/M/X/Y/U/V/F/S, digits,
-minus, decimal point, space, delete, clear and Enter. Editing follows the input
-cursor/selection and the 254-character limit. Enter uses the existing MDI submit
-path and all machine-state restrictions. While open, inputmode=none suppresses
-the device keyboard where supported; collapse it to use the device keyboard.
-
-
-## Execute the previewed program
-
-The toolpath tab now has Run Program, Pause, Resume and Abort. Upload/preview first,
-home all joints, enable the machine, then click Run. The browser performs three
-separate, acknowledged commands: AUTO mode, open the immutable preview copy, then
-AUTO_RUN from the beginning. Each step requires a fresh one-use command token;
-no step is retried. Abort, OFF, ESTOP, disconnect or a manual-mode/MDI command
-cancels the host's start-preparation ticket. Preparation expires after 15 seconds.
-
-The adapter verifies all homed, enable, idle, no manual activity, unchanged initial
-position (0.001 machine units tolerance), active WCS/G92/tool offsets and rotation,
-the loaded path, and the SHA-256 of the preview copy. Start authority is bound to
-the WebSocket session. A start token is consumed before AUTO_RUN, including when
-its response is uncertain. Re-preview to run again, or after moving/changing
-offsets. A host restart invalidates preview IDs.
-
-Both preview and execution use the same generated file with one initialization
-line: machine units, G90, G94, G17, G40, G49 and the captured active WCS.
-This is especially relevant for Devwing programs that end in G93 and do not reset
-G94 in the next program header. Source line numbers are mapped past that line.
-Percent-delimited files are normalized while preserving source-line correspondence.
-M2 is appended to terminate files lacking an explicit end command.
-Machine-specific remaps are currently rejected for running, because the standard
-preview interpreter does not validate them. Other preview limitations still apply.
-
-Copies are stored by the host user under --program-dir/.foamomatic-programs
-(default ~/linuxcnc/nc_files/.foamomatic-programs). Docker needs no extra volume.
-Inactive copies created in the current service session are pruned on subsequent
-successful previews; loaded/running copies are retained. Old files from previous
-service sessions can be removed while the machine is idle, if no longer needed.
-
-During execution, the program runs locally in LinuxCNC: browser network speed
-does not clock the trajectory. A connection loss does not automatically stop it.
-M commands now execute on the real machine according to the current INI/HAL;
-the preview still does not model heater state. M0 requires Resume.
-Pause/Resume address the program started by this adapter; global Abort and ESTOP
-remain available for other machine activity.
-
-Update the adapter and rebuild Docker with the machine idle, then reload the page.
-Real AUTO mode/open/run and the machine's M-code wiring need validation on Debian;
-automated tests use a fake machine only.
-
-
-## Compact tablet layout
-
-The header stays visible with ESTOP, reset, enable/disable, abort, connection state
-and one Connect/Disconnect button. Connect opens a native dialog for the token;
-successful authentication closes it. Cancel/Escape cancels an in-progress
-connection. No token is saved to browser storage.
-
-At tablet sizes (700+ CSS pixels wide, 650+ high), the application uses the
-available viewport. Toolpath upload is beside the canvas; run controls sit below.
-MDI keyboard and history share the panel, with bounded history scrolling.
-Long help text is available through expandable summaries. Smaller/shorter screens
-retain document scrolling rather than hiding controls.
-Default views were checked in headless Edge at 1024x768, 1280x800 and 768x1024
-without document, panel or editor scrolling. Expanded help, long errors, large
-text/zoom or a device keyboard can still require internal scrolling.
-A 390x844 phone viewport was checked for horizontal overflow and header access.
-
-Only the Docker frontend needs rebuilding for this layout update; the host
-adapter/systemd service does not need restarting.
-
-
-## Language
-
-English is the project language for the interface, status messages, accessibility
-labels, documentation, and tests. Messages forwarded directly from LinuxCNC retain
-the language configured on the host.
-
-
-## Follow program execution
-
-Follow program is enabled by default for each newly loaded preview.
-Only status whose loaded/running program IDs match that preview can advance it.
-The executing source_line (mapped from motion_line, not interpreter read-ahead)
-selects the current segment. Projection of the live XYUV coordinates onto that
-segment estimates progress within a long G1 move, including G93 programs.
-Completed preview segments/surfaces are green; future paths retain their
-blue/purple or dashed-orange colors. The white wire still shows the actual
-sampled machine position.
-
-Dragging the preview slider switches to manual inspection; checking Follow
-program returns to the live segment. Manual inspection does not change machine
-operation. Pause/M0 retain the current progress. Missing or stale status freezes
-the progress rather than advancing a browser animation. Updates follow the
-existing 5 Hz telemetry; very short moves can be skipped between samples.
-The nominal mm-coordinate assumptions and preview limitations still apply.
-
-Only a gateway image rebuild and browser refresh are needed; the host adapter
-already supplies the source-line and program-identity fields.
-
+## How it works
+
+LinuxCNC and the gateway run on the same Debian host. LinuxCNC remains responsible
+for real-time motion and the Mesa interface; Docker serves the browser application.
+
+```text
+Desktop / tablet browser
+        |
+        | HTTP + WebSocket, operator LAN
+        v
+Docker: FastAPI gateway + HTML/CSS/JavaScript interface
+        |
+        | Unix socket: /run/foamomatic/adapter.sock
+        v
+Host: Python adapter, supervised by systemd
+        |
+        | LinuxCNC Python API
+        v
+LinuxCNC + real-time Mesa driver --> Mesa Ethernet card --> machine
+```
+
+The adapter uses the host's LinuxCNC Python modules. It does not run in Docker
+or a separate virtual environment. The container needs no LinuxCNC libraries,
+privileged mode or host PID/IPC sharing. Its machine connection is a bind mount
+of the adapter's socket directory, with access restricted to the operator's UID/GID.
+
+A complete program is uploaded and interpreted on the host before execution.
+LinuxCNC then runs the prepared program locally; the browser does not stream
+motion commands line by line. Status updates arrive at 5 Hz, so a slow operator
+network affects display freshness rather than trajectory timing. Use a dedicated
+Ethernet interface for Mesa and a separate interface for operator LAN traffic.
+
+### Features and operating limits
+
+- **Machine Status:** machine/work coordinates, homing state, operating mode,
+  interpreter state, errors, individual X/Y/U/V homing and Home All.
+- **Persistent header controls:** connection, Machine On/Off, software ESTOP,
+  ESTOP Reset and Abort, available above all three tabs.
+- **Toolpath and Preview:** live wire position, sampled motion trail, rotatable
+  XYUV preview, source-line slider, Run Program, Pause and Resume.
+- **Follow program:** highlights progress using the executing source line and
+  live position of the matching program. Moving the slider allows manual
+  inspection; enabling Follow program returns to execution progress.
+- **MDI:** single-line G-code entry, submission history and a touch keyboard.
+  Machine enable, homing and interpreter-state checks gate commands.
+
+Preview accepts UTF-8 `.nc` and `.ngc` files up to 256 KiB, with at most 12,000
+segments and 20 seconds of interpretation. It uses LinuxCNC's interpreter in an
+isolated process, supporting XYUV G0/G1 moves and G93 inverse-time feed programs.
+Arcs, probing, rigid tapping and nonzero tool offsets are unsupported;
+machine-specific remaps are rejected for execution. Preview does not validate
+travel limits or simulate heater M codes. During execution, M codes operate
+according to the machine's actual LinuxCNC INI/HAL configuration.
+
+## Installation
+
+### 1. Prepare the Debian host and install Docker
+
+Use a Debian-based LinuxCNC installation with a working, validated four-joint
+XYUV INI/HAL configuration. Run the following commands as the same regular user
+who operates LinuxCNC. LinuxCNC installation and machine commissioning are
+prerequisites; Foamomatic does not configure the Mesa card, homing or motion limits.
+
+If Docker is not installed, install it using Docker's convenience script:
+
+```sh
+sudo apt-get update
+sudo apt-get install curl
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+```
+
+Log out of the desktop/SSH session and log back in to apply group membership.
+Then verify Docker and the Compose plugin:
+
+```sh
+docker run --rm hello-world
+docker compose version
+```
+
+See the [Docker Debian installation guide](https://docs.docker.com/engine/install/debian/)
+for supported distributions and alternative installation methods, and
+[Docker post-installation steps](https://docs.docker.com/engine/install/linux-postinstall/)
+for group setup. The convenience script is intended for testing/development;
+membership in the `docker` group grants root-level privileges.
+
+### 2. Download Foamomatic
+
+Install Git if needed, then clone the repository into a permanent location:
+
+```sh
+sudo apt-get install git
+mkdir -p ~/git
+cd ~/git
+git clone https://github.com/boozeman/foamomatic.git
+cd foamomatic
+```
+
+Authenticate with your own Git credentials if the repository is private.
+Keep this checkout in place: the systemd service uses its absolute path.
+The path must not contain whitespace, quotes or backslashes.
+
+Verify that the host's system Python can import the LinuxCNC modules:
+
+```sh
+/usr/bin/python3 -c 'import linuxcnc, gcode, rs274; print("LinuxCNC modules available")'
+```
+
+These modules come from the LinuxCNC installation, not `pip` or the container.
+
+### 3. Start LinuxCNC and install the host adapter
+
+Start LinuxCNC with your XYUV configuration and leave the machine idle.
+Install the adapter service from the repository root:
+
+```sh
+sudo python3 deploy/install_systemd.py --user "$(id -un)"
+systemctl status foamomatic-adapter --no-pager
+journalctl -u foamomatic-adapter -n 50 --no-pager
+```
+
+The installer checks Python imports as the operator, validates and installs the
+systemd unit, and enables/starts the service. It prints the numeric UID/GID needed
+in the next step. Do not copy the service template directly or run a second
+manual adapter alongside the service.
+
+The adapter requires exactly one running `linuxcncsvr` process. If LinuxCNC is
+not running yet, systemd retries every five seconds. After LinuxCNC starts,
+confirm that `/run/foamomatic/adapter.sock` exists before starting the container.
+
+### 4. Configure the gateway and LAN access
+
+Create your local configuration and generate a connection key:
+
+```sh
+cp .env.example .env
+python3 -c 'import secrets; print(secrets.token_hex(32))'
+id -u
+id -g
+nano .env
+```
+
+Copy the generated key into `FOAM_TOKEN` and use your operator's UID/GID.
+For access at `http://linuxcnc.local:8080`, the configuration could be:
+
+```dotenv
+FOAM_UID=1000
+FOAM_GID=1000
+FOAM_BIND_IP=192.168.1.50
+FOAM_TOKEN=replace-with-your-generated-key
+FOAM_ORIGINS=http://linuxcnc.local:8080
+
+FOAM_VIEW_WIDTH_MM=1000
+FOAM_VIEW_HORIZONTAL_MAX_MM=710
+FOAM_VIEW_VERTICAL_MAX_MM=260
+```
+
+Replace `192.168.1.50` with the host's operator-LAN address, and replace UID/GID
+with your actual values. The default bind address in `.env.example` is
+`127.0.0.1`, which only allows access from the host itself. Never bind the gateway
+to the Mesa interface.
+
+`linuxcnc.local` must resolve to the host from the client device; Docker does
+not create that name. It normally requires the host name `linuxcnc` and working
+mDNS, for example through Avahi. Alternatively, use the host's IP address in both
+the browser URL and `FOAM_ORIGINS`. Origins must match exactly, including scheme,
+name and port; multiple allowed origins are comma separated. Use HTTPS/WSS through
+a reverse proxy when accessing the interface over untrusted networks.
+
+The three `FOAM_VIEW_*` values only set visualization bounds. Configure actual
+travel limits in LinuxCNC. The visualization assumes millimetres. No Docker volume
+is needed for these settings: they persist in the host's `.env` file.
+
+### 5. Build and start the container
+
+From the repository root, after the adapter socket is available:
+
+```sh
+docker compose up -d --build
+docker compose ps
+curl http://linuxcnc.local:8080/health
+```
+
+Open **http://linuxcnc.local:8080**, press **Connect** and enter `FOAM_TOKEN`.
+The key stays in browser memory for the connection and is not saved to browser
+storage. Verify that live machine status appears; `/health` only checks the
+gateway process, not the adapter or LinuxCNC connection.
+
+The supplied Compose file uses `restart: "no"`, so the gateway does not
+start automatically after a host reboot. Start LinuxCNC and wait for the adapter
+socket, then run `docker compose up -d`. `/run` is recreated on reboot: if the
+container started before the adapter directory was ready, recreate it with
+`docker compose up -d --force-recreate` after the socket becomes available.
+
+## Using Foamomatic
+
+1. Connect and check the machine state. Reset software ESTOP and enable the
+   machine when appropriate for your machine's operating procedure.
+2. Select Manual mode and home X/Y/U/V individually or use Home All. LinuxCNC's
+   INI/HAL configuration defines the actual homing motion and sequencing.
+3. For manual commands, open **MDI**, select MDI mode and submit one line.
+   The touch keyboard is optional; history is kept only in browser memory.
+4. To run a file, open **Toolpath and Preview** and upload it while LinuxCNC is
+   idle. Inspect both endpoint paths and the swept surface before pressing
+   **Run Program**. Pause/Resume control that program; M0 waits for Resume.
+5. Leave **Follow program** enabled to follow execution, or move the preview
+   slider to inspect a source line. This only changes the display.
+
+Preview captures the starting position and offsets. Run requires the machine to
+remain in that context and all joints to be homed. Moving the machine or changing
+offsets requires a new preview. Re-preview before each new run and after an
+adapter restart. The adapter opens and executes the same prepared copy that was
+previewed; it does not replay an uncertain start request.
+
+Prepared files are stored on the host under
+`~/linuxcnc/nc_files/.foamomatic-programs` by default. No additional container
+volume is needed. Temporary interpreter files are removed after preview;
+obsolete prepared copies from the current service session are pruned on later
+previews. Copies left by earlier sessions may be removed while idle if no longer
+needed.
+
+Disconnecting the browser does **not** abort an executing program or MDI command.
+A leased manual jog stops when its lease expires. Stale status disables ordinary
+controls; commands are never automatically retried. Browser ESTOP is a network
+command, not a replacement for the physical emergency stop. Independent hardware
+watchdog and dedicated heater controls are not implemented.
+
+## Updates and troubleshooting
+
+Update only while the machine is idle. For a full application update:
+
+```sh
+git pull --ff-only
+sudo systemctl restart foamomatic-adapter
+docker compose up -d --build --force-recreate
+```
+
+Reload the browser after updating. Adapter-only changes require a service
+restart; gateway/UI changes require an image rebuild. Rerun the systemd installer
+if the unit, checkout path or operator account changes.
+
+Useful diagnostics:
+
+```sh
+systemctl status foamomatic-adapter --no-pager
+journalctl -u foamomatic-adapter -f
+docker compose logs --tail=100 gateway
+```
+
+| Symptom | Check |
+| --- | --- |
+| Browser cannot reach port 8080 | Container state, `FOAM_BIND_IP`, host name resolution and operator-LAN connectivity. |
+| Connection is rejected | `FOAM_TOKEN` and the exact browser origin in `FOAM_ORIGINS`. |
+| Gateway is healthy but status is unavailable | LinuxCNC, adapter logs, socket directory mount and matching UID/GID. |
+| MDI or Run is disabled | Machine enable, ESTOP, all four homed joints, fresh status and interpreter state. |
+| UI looks outdated | Rebuild the gateway and hard-refresh the browser. |
+
+The adapter detects LinuxCNC shutdown/restart using process identity and channel
+health. It exits on a lost connection, and systemd retries every five seconds.
+It does not restart LinuxCNC, enable the machine, home axes or resume commands.
+With the browser connection still open, status recovers through the existing
+gateway without a Docker restart. Preview again before starting a new program.
+This connection supervisor is separate from a hardware machine-safety watchdog.
+
+## Development and verification
+
+The interface and project documentation use English. Messages forwarded from
+LinuxCNC retain the host's configured language.
+
+Python tests use a fake LinuxCNC API unless the optional integration test is
+explicitly enabled. In a separate development environment with the gateway
+dependencies and `httpx` installed, run:
+
+```sh
+python -m unittest discover -s tests -v
+node tests/test_control_policy.mjs
+node tests/test_program_ui.mjs
+node tests/test_wire_geometry.mjs
+node tests/test_preview_progress.mjs
+```
+
+Real LinuxCNC interpreter integration, Docker deployment and Mesa operation must
+be verified on the Debian machine. Check LinuxCNC latency under expected
+container/network load, and avoid image builds during cutting.
 
 ## License
 
@@ -411,43 +350,3 @@ Foamomatic is licensed under the **GNU General Public License, version 3 only**
 the terms for copying, modification and distribution.
 
 Third-party dependencies remain subject to their respective licenses.
-
-
-## LinuxCNC lifecycle supervision
-
-The host adapter is supervised by the existing systemd service
-(Restart=on-failure, RestartSec=5). It requires one running linuxcncsvr before
-opening its control socket and captures the process PID and kernel start time.
-PID reuse is detected. If LinuxCNC stops or restarts, the adapter invalidates
-its old connection and exits with a failure status; systemd retries until the
-new LinuxCNC runtime and channels are available.
-
-The adapter also polls channel health while idle (every 0.5 seconds). Three
-consecutive failed health checks trigger a restart. Active jogs retain the
-existing faster lease watchdog. This lifecycle supervisor is not a replacement
-for an independent hardware/HAL safety watchdog and does not restart LinuxCNC.
-
-Every control request checks the bound runtime before using its NML objects.
-A lost runtime clears local jog ownership, pending MDI and preview/run authority.
-It does not automatically enable, home, resume or replay commands.
-Upload/preview again before a new program run after reconnecting.
-
-The gateway keeps polling the host socket and can recover status without a Docker
-restart or browser reload if its WebSocket is still connected. Controls become
-unavailable while status is missing. RuntimeDirectoryPreserve=yes keeps the bind
-mount directory stable while the socket itself is recreated.
-
-After pulling this change, with the machine idle:
-
-    sudo systemctl restart foamomatic-adapter
-
-No Docker rebuild or unit reinstall is needed when using the supplied existing
-systemd unit. Follow the logs to verify shutdown/restart recovery on Debian:
-
-    journalctl -u foamomatic-adapter -f
-
-For verification, stop LinuxCNC and start it again while the machine is idle.
-Expect a runtime-change/waiting message, a new connection PID, and status returning
-in the browser. Recovery includes the configured five-second restart interval
-plus LinuxCNC startup time. Actual machine-host integration must be verified
-locally; automated tests simulate runtime identity and channel failures.
