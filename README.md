@@ -1,6 +1,6 @@
 # Foamomatic
 
-## DISCLAIMER — PROOF OF CONCEPT
+## DISCLAIMER â€” PROOF OF CONCEPT
 
 **Foamomatic is experimental Proof of Concept software. It is not production-ready
 and is not a certified machine-safety system. Use it entirely at your own risk.**
@@ -32,7 +32,7 @@ watchdogs do not replace physical machine-safety systems.
 
 No guarantee of maintenance, support, updates or continued availability is made.
 Nothing in this disclaimer excludes liability that cannot lawfully be excluded.
-The warranty and liability provisions in Sections 15–17 of the GNU GPL version 3
+The warranty and liability provisions in Sections 15â€“17 of the GNU GPL version 3
 also apply.
 
 ## What is Foamomatic?
@@ -220,7 +220,28 @@ interface. The address must respond to ICMP ping. Two consecutive successful
 probes, approximately two seconds apart, trigger startup. This is a reachability
 check, not verification of firmware, HAL readiness or drive power; LinuxCNC
 performs its own hardware initialization. No ping probes are sent while the
-launched LinuxCNC process is running.
+launched LinuxCNC process is running. Instead, the launcher reads the local
+Mesa HAL `hm2_*.io_error` parameter approximately every two seconds. Three
+consecutive TRUE readings trigger a controlled shutdown of its own LinuxCNC
+instance, including AXIS, using `axis-remote --quit`. The launcher waits for
+LinuxCNC to exit before probing Mesa again. A shutdown timeout stops the launcher
+with an error rather than starting another instance.
+
+After a previously healthy connection fails, two successful Mesa probes allow
+LinuxCNC to restart, even if the controller was turned back on before shutdown
+finished. Neither machine enable, homing nor program execution is restored.
+If startup never reached a healthy HAL state, another attempt requires a power
+cycle or explicit service restart, preventing repeated failed startup windows.
+Missing HAL parameters, read errors and individual transient samples do not
+trigger shutdown; check the launcher logs if recovery does not occur.
+
+For the usual single-Mesa configuration the parameter is detected automatically.
+For multiple Mesa cards, select the controller's exact parameter at installation,
+for example `--mesa-error-param hm2_7i96s.0.io_error`. Inspect names while LinuxCNC
+is running with `halcmd -s show param 'hm2_*.io_error'`. This selects a local HAL
+parameter, not an extra connection to the card. See the
+[Mesa Ethernet driver documentation](https://linuxcnc.org/docs/2.9/html/man/man9/hm2_eth.9.html)
+for communication error behavior.
 
 The installer creates these files under the operator's home directory:
 
@@ -241,11 +262,12 @@ auto-login), then turn on the controller using its physical button. It also
 works if the controller is already powered when the desktop session starts.
 The launcher does not enable the machine, reset ESTOP, home or start a program.
 
-Closing AXIS or a failed LinuxCNC startup leaves the launcher waiting; it does
+Manually closing AXIS or a failed LinuxCNC startup leaves the launcher waiting; it does
 not repeatedly reopen windows. Once LinuxCNC has exited, three failed probes
 followed by two successful probes allow another launch. Alternatively, while
 idle, explicitly retry with `systemctl --user restart foamomatic-linuxcnc`.
-A brief network interruption never tells this launcher to stop LinuxCNC.
+Ordinary transient packet errors do not trigger shutdown. A confirmed, latched
+Mesa I/O error does, even if its cause was a network failure rather than power-off.
 
 An existing LinuxCNC process or `/tmp/linuxcnc.lock` blocks a second launch,
 including an instance using a different INI. The launcher never deletes locks
@@ -376,7 +398,9 @@ restart; gateway/UI changes require an image rebuild. Rerun the systemd installe
 if the unit, checkout path or operator account changes. If the optional launcher
 is installed, stop it before maintenance and restart it afterwards with
 `systemctl --user restart foamomatic-linuxcnc`. Launcher source changes need a
-user-service restart; template changes require rerunning its installer. Stopping
+user-service restart; template changes require rerunning its installer. Existing
+launcher installations discover `halcmd` and `axis-remote` automatically, so the
+Mesa shutdown/recovery update only needs a user-service restart while idle. Stopping
 the launcher also shuts down the LinuxCNC instance it started.
 
 Useful diagnostics:

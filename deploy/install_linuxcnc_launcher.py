@@ -26,6 +26,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--ini', type=Path)
     parser.add_argument('--mesa-ip')
+    parser.add_argument('--mesa-error-param', help='Exact hm2_<board>.<number>.io_error parameter for multi-card hosts')
     parser.add_argument('--session-start', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     if sys.platform != 'linux' or os.geteuid() == 0:
@@ -48,7 +49,7 @@ def main():
     # Shared path restrictions also keep systemd and desktop Exec parsing simple.
     if any(c.isspace() or c in '\"\'\\%$`' for c in str(root)):
         parser.error('Checkout path must not contain whitespace or shell/systemd special characters')
-    programs = {name: shutil.which(name) for name in ('linuxcnc', 'ping')}
+    programs = {name: shutil.which(name) for name in ('linuxcnc', 'ping', 'halcmd')}
     if not all(programs.values()):
         parser.error('Install LinuxCNC and iputils-ping first')
     home = Path.home()
@@ -58,6 +59,13 @@ def main():
     for directory in (config_dir, unit_dir, autostart):
         directory.mkdir(parents=True, exist_ok=True)
     config = {'ini': str(ini), 'mesa_ip': address, **programs}
+    config['axis_remote'] = shutil.which('axis-remote')
+    if args.mesa_error_param:
+        if not (args.mesa_error_param.startswith('hm2_') and
+                args.mesa_error_param.endswith('.io_error') and
+                all(c.isalnum() or c in '._-' for c in args.mesa_error_param)):
+            parser.error('--mesa-error-param must be an exact hm2_<board>.<number>.io_error name')
+        config['mesa_error_param'] = args.mesa_error_param
     (config_dir / 'linuxcnc.json').write_text(json.dumps(config, indent=2) + '\n')
     unit = (root / 'deploy' / UNIT).read_text().replace('@PROJECT_ROOT@', str(root))
     (unit_dir / UNIT).write_text(unit)

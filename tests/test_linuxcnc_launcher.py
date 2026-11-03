@@ -51,10 +51,11 @@ class GateTests(unittest.TestCase):
         child = Mock()
         child.poll.side_effect = [None, None, 0]
         config = {'mesa_ip': '10.10.10.10', 'ping': '/bin/ping',
-                  'linuxcnc': '/usr/bin/linuxcnc', 'ini': '/home/cnc/cutter.ini'}
+                  'halcmd': '/usr/bin/halcmd', 'linuxcnc': '/usr/bin/linuxcnc', 'ini': '/home/cnc/cutter.ini'}
         with patch.object(launcher.threading, 'Event', return_value=event), \
              patch.object(launcher.signal, 'signal'), \
              patch.object(launcher, 'linuxcnc_busy', return_value=False), \
+             patch.object(launcher, 'read_mesa_error', return_value=False), \
              patch.object(launcher, 'probe', return_value=True) as probe, \
              patch.object(launcher.subprocess, 'Popen', return_value=child) as start:
             launcher.supervise(config)
@@ -63,7 +64,7 @@ class GateTests(unittest.TestCase):
         self.assertEqual(probe.call_count, 6)  # eight ticks minus two active-child ticks
         child.terminate.assert_not_called()
 
-    def test_stop_forwards_termination_to_owned_launcher(self):
+    def test_stop_closes_owned_launcher(self):
         event = Mock()
         event.is_set.return_value = False
         handlers = {}
@@ -79,15 +80,85 @@ class GateTests(unittest.TestCase):
         event.set.side_effect = stop
         event.wait.side_effect = wait
         config = {'mesa_ip': '10.10.10.10', 'ping': '/bin/ping',
-                  'linuxcnc': '/usr/bin/linuxcnc', 'ini': '/home/cnc/cutter.ini'}
+                  'halcmd': '/usr/bin/halcmd', 'linuxcnc': '/usr/bin/linuxcnc', 'ini': '/home/cnc/cutter.ini'}
         with patch.object(launcher.threading, 'Event', return_value=event), \
              patch.object(launcher.signal, 'signal', side_effect=lambda sig, cb: handlers.update({sig: cb})), \
              patch.object(launcher, 'linuxcnc_busy', return_value=False), \
+             patch.object(launcher, 'read_mesa_error', return_value=False), \
              patch.object(launcher, 'probe', return_value=True), \
              patch.object(launcher.subprocess, 'Popen', return_value=child):
             launcher.supervise(config)
         self.assertTrue(child.terminate.called)
         child.wait.assert_called_once_with(timeout=25)
+
+    def test_hal_status_requires_exactly_one_valid_board(self):
+        cases = [('', None), ('hm2_eth bit RW FALSE hm2_7i96s.0.io_error', False),
+                 ('hm2_eth bit RW TRUE hm2_7i96s.0.io_error', True),
+                 ('hm2_eth bit RW MAYBE hm2_7i96s.0.io_error', None),
+                 ('hm2_eth bit RW TRUE hm2_7i96s.0.io_error\n'
+                  'hm2_eth bit RW FALSE hm2_7i92.0.io_error', None)]
+        for output, expected in cases:
+            with self.subTest(output=output), patch.object(launcher.subprocess, 'run',
+                    return_value=Mock(returncode=0, stdout=output)):
+                self.assertIs(launcher.read_mesa_error('/usr/bin/halcmd'), expected)
+        with patch.object(launcher.subprocess, 'run', side_effect=launcher.subprocess.TimeoutExpired('halcmd', 2)):
+            self.assertIsNone(launcher.read_mesa_error('/usr/bin/halcmd'))
+
+    def test_fault_confirmation_ignores_transient_and_unknown_values(self):
+        health = launcher.MesaHealth()
+        for value in (False, True, True, None, True, False, True, True):
+            self.assertFalse(health.sample(value))
+        self.assertTrue(health.sample(True))
+        self.assertTrue(health.healthy_seen)
+
+    def test_power_loss_reaps_old_instance_before_relaunch(self):
+        event = Mock()
+        event.is_set.return_value = False
+        first, second = Mock(), Mock()
+        first.poll.return_value = None
+        second.poll.return_value = None
+        calls = []
+        def wait_child(timeout):
+            calls.append('reaped')
+            first.returncode = 0
+            first.poll.return_value = 0
+        first.wait.side_effect = wait_child
+        ticks = []
+        def tick(timeout):
+            ticks.append(timeout)
+            if len(ticks) >= 9:
+                event.is_set.return_value = True
+        event.wait.side_effect = tick
+        children = iter((first, second))
+        def start(*args, **kwargs):
+            calls.append('start')
+            return next(children)
+        config = {'mesa_ip': '10.10.10.10', 'ping': '/bin/ping', 'halcmd': '/usr/bin/halcmd',
+                  'linuxcnc': '/usr/bin/linuxcnc', 'ini': '/home/cnc/cutter.ini'}
+        with patch.object(launcher.threading, 'Event', return_value=event), \
+             patch.object(launcher.signal, 'signal'), \
+             patch.object(launcher, 'linuxcnc_busy', return_value=False), \
+             patch.object(launcher, 'probe', return_value=True), \
+             patch.object(launcher, 'read_mesa_error', side_effect=[False, True, True, True, False, False]), \
+             patch.object(launcher.subprocess, 'Popen', side_effect=start):
+            launcher.supervise(config)
+        self.assertEqual(calls[:3], ['start', 'reaped', 'start'])
+        first.terminate.assert_called_once()
+        first.wait.assert_called_once_with(timeout=25)
+
+    def test_axis_close_requests_graceful_exit_before_waiting(self):
+        child = Mock()
+        with patch.object(launcher.subprocess, 'run', return_value=Mock(returncode=0)) as run:
+            launcher.close_owned_linuxcnc(child, '/usr/bin/axis-remote')
+        self.assertEqual(run.call_args.args[0], ['/usr/bin/axis-remote', '--quit'])
+        child.terminate.assert_not_called()
+        child.wait.assert_called_once_with(timeout=25)
+
+    def test_shutdown_timeout_is_an_error(self):
+        child = Mock()
+        child.wait.side_effect = launcher.subprocess.TimeoutExpired('linuxcnc', 25)
+        with self.assertRaisesRegex(RuntimeError, 'refusing to launch'):
+            launcher.close_owned_linuxcnc(child, None)
 
     def test_probe_uses_bounded_ping_without_shell(self):
         with patch.object(launcher.subprocess, 'run', return_value=Mock(returncode=0)) as run:
