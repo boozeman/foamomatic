@@ -5,6 +5,12 @@
 **Foamomatic is experimental Proof of Concept software. It is not production-ready
 and is not a certified machine-safety system. Use it entirely at your own risk.**
 
+Before using Foamomatic, you are expected to have successfully installed and
+configured your own hot-wire cutter and verified that it operates correctly
+using LinuxCNC's standard AXIS interface. You are also expected to be comfortable
+using Linux, including the terminal, configuration files and system services.
+Foamomatic assumes an already working LinuxCNC machine configuration.
+
 This software can control machinery, motion and connected equipment. Incorrect
 configuration, software defects, communication failures or misuse can cause
 unexpected movement, fire, equipment damage, serious injury or death.
