@@ -109,7 +109,7 @@ Ethernet interface for Mesa and a separate interface for operator LAN traffic.
 - **Follow program:** highlights progress using the executing source line and
   live position of the matching program. Moving the slider allows manual
   inspection; enabling Follow program returns to execution progress.
-- **MDI:** single-line G-code entry, submission history and a touch keyboard.
+- **MDI:** single-line G-code entry, touch keyboard, M8/M9 heater buttons and four editable macros.
   Machine enable, homing and interpreter-state checks gate commands.
 
 Preview accepts UTF-8 `.nc` and `.ngc` files up to 256 KiB, with at most 12,000
@@ -357,7 +357,12 @@ container started before the adapter directory was ready, recreate it with
 2. Select Manual mode and home X/Y/U/V individually or use Home All. LinuxCNC's
    INI/HAL configuration defines the actual homing motion and sequencing.
 3. For manual commands, open **MDI**, select MDI mode and submit one line.
-   The touch keyboard is optional; history is kept only in browser memory.
+   The touch keyboard follows the QtFoam layout. Heater On (M8) and Heater Off
+   (M9) submit immediately when MDI is available and preserve the input line.
+   Edit macros configures four named commands saved in this browser; selecting
+   a macro loads it for editing and Enter sends it. Double-click a history entry
+   to recall it (keyboard: focus it and press Enter). Only successful submissions
+   enter the 30-entry session history, which is kept in browser memory.
 4. To run a file, open **Toolpath and Preview** and upload it while LinuxCNC is
    idle. Inspect both endpoint paths and the swept surface before pressing
    **Run Program**. Pause/Resume control that program; M0 waits for Resume.

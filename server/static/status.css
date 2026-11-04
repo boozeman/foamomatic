@@ -15,3 +15,15 @@ main{max-width:1600px;margin:auto;padding:10px 18px;width:100%;min-height:0}.tab
 @media(min-width:700px){.wire-panel{grid-template-rows:auto minmax(0,1fr) auto auto}.program-controls{grid-column:1/-1;grid-row:3;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 12px;padding:8px 14px;border-top:1px solid #304341}.program-controls .view-actions{display:flex;flex-wrap:wrap}.program-controls p{margin:0}.program-controls>.compact-help{grid-column:1/-1;margin:0}.program-controls #program-selection{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;align-self:center}#program-message,#program-progress{font-size:11px}.wire-caption{grid-row:4}.preview-sidebar{border-bottom:0}}
 
 .follow-control{display:flex;align-items:center;gap:7px;min-height:44px;margin:0;font-size:12px;white-space:nowrap;cursor:pointer}.follow-control input{width:18px;height:18px;min-height:0;padding:0;margin:0;flex:none;accent-color:#78d5bc}.wire-meta{display:flex;justify-content:space-between;gap:5px 14px;flex-wrap:wrap}#follow-status{color:#94c8bd}
+/* Match the native MDI letter/numeric keypad and macro sidebar. */
+.mdi-heater{display:flex;gap:8px;margin-bottom:12px}.mdi-heater button{flex:1}
+.mdi-letter-keys{grid-template-columns:repeat(2,minmax(0,1fr))}
+.mdi-keyboard fieldset{grid-template-columns:2fr 3fr;gap:12px}
+.mdi-macros{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:12px 14px}
+.mdi-macros button{overflow-wrap:anywhere;min-width:0}
+.mdi-history li{cursor:pointer}.mdi-history-help{padding:12px 14px;margin:0}
+#mdi-macro-dialog{color:inherit;background:#172223;border:1px solid #405956;border-radius:9px;width:min(660px,calc(100% - 24px));max-height:90dvh;padding:20px}
+#mdi-macro-dialog::backdrop{background:#0009}
+#mdi-macro-title{margin-bottom:12px}.mdi-macro-row{display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-bottom:10px}
+.mdi-macro-row input{display:block;width:100%;margin-top:6px}#mdi-macro-error{color:#ffb4aa;font-size:13px}
+@media(max-width:580px){.mdi-macro-row{grid-template-columns:1fr}.mdi-key-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}

@@ -1,17 +1,14 @@
 export function createMdiKeyboard() {
   const input=document.getElementById("mdi-input");
-  const details=document.getElementById("mdi-keyboard");
   const keys=document.getElementById("mdi-keyboard-keys");
   const form=document.getElementById("mdi-form");
   const submit=document.getElementById("mdi-send");
-  function inputMode(){input.inputMode=details.open?"none":"text";}
-  details.addEventListener("toggle",inputMode);
-  inputMode();
+  input.inputMode="none";
   for(const button of keys.querySelectorAll("button")){
     // Keep the input selection when tapping a key.
     button.addEventListener("pointerdown",event=>event.preventDefault());
     button.addEventListener("click",()=>{
-      if(input.disabled||keys.disabled)return;
+      if(input.disabled||keys.disabled||button.type==="submit")return;
       const action=button.dataset.mdiAction;
       if(action==="enter"){
         if(!submit.disabled&&input.value.trim())form.requestSubmit(submit);

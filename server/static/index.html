@@ -65,23 +65,31 @@
 </section>
 <section class="details"><div><span class="muted">Program file</span><p id="file">—</p></div><div><span class="muted">Program line</span><p id="line">—</p></div></section>
 </section>
+<dialog id="mdi-macro-dialog" aria-labelledby="mdi-macro-title">
+<form id="mdi-macro-form">
+<h2 id="mdi-macro-title">Edit MDI macros</h2>
+<p class="muted small">Each macro loads one G-code line into the input. Enter sends it.</p>
+<div id="mdi-macro-fields" class="mdi-macro-fields"></div>
+<p id="mdi-macro-error" role="alert"></p>
+<div class="view-actions"><button type="submit">Save</button><button id="mdi-macro-cancel" type="button" class="secondary">Cancel</button></div>
+</form></dialog>
 <section id="panel-mdi" role="tabpanel" aria-labelledby="tab-mdi" hidden>
 <article class="mdi-panel"><div class="panel-heading"><div><h2>Manual G-code input</h2><p class="muted small">One command at a time · up to 254 ASCII characters</p></div><div class="view-actions"><button id="mdi-mode" type="button" disabled>Select MDI mode</button></div></div>
 <form id="mdi-form">
+<div class="mdi-heater"><button id="mdi-heater-on" type="button" disabled>Heater On · M8</button><button id="mdi-heater-off" type="button" class="secondary" disabled>Heater Off · M9</button></div>
 <label for="mdi-input">MDI command</label>
-<div class="login-row"><input id="mdi-input" type="text" maxlength="254" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="For example, G90" disabled><button id="mdi-send" type="submit" disabled>Send command</button></div>
-<details id="mdi-keyboard" class="mdi-keyboard" open>
-<summary>Touch keyboard</summary>
+<div class="login-row"><input id="mdi-input" type="text" maxlength="254" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="For example, G90" disabled></div>
+<div id="mdi-keyboard" class="mdi-keyboard">
 <fieldset id="mdi-keyboard-keys" disabled aria-label="MDI touch keyboard">
 <div class="mdi-key-grid mdi-letter-keys">
 <button type="button" data-mdi-key="G" class="secondary">G</button>
 <button type="button" data-mdi-key="M" class="secondary">M</button>
-<button type="button" data-mdi-key="F" class="secondary">F</button>
-<button type="button" data-mdi-key="S" class="secondary">S</button>
 <button type="button" data-mdi-key="X" class="secondary">X</button>
 <button type="button" data-mdi-key="Y" class="secondary">Y</button>
 <button type="button" data-mdi-key="U" class="secondary">U</button>
 <button type="button" data-mdi-key="V" class="secondary">V</button>
+<button type="button" data-mdi-key="F" class="secondary">F</button>
+<button type="button" data-mdi-key="S" class="secondary">S</button>
 </div>
 <div class="mdi-key-grid mdi-number-keys">
 <button type="button" data-mdi-key="7" class="secondary">7</button>
@@ -101,14 +109,14 @@
 <button type="button" data-mdi-key=" " class="secondary">Space</button>
 <button type="button" data-mdi-action="backspace" class="secondary" aria-label="Delete the previous character or selected text">⌫ Delete</button>
 <button type="button" data-mdi-action="clear" class="secondary">Clear line</button>
-<button type="button" data-mdi-action="enter">Enter · Send</button>
+<button id="mdi-send" type="submit" disabled>Enter · Send</button>
 </div>
 </fieldset>
-</details>
+</div>
 <p id="mdi-help" class="muted small" role="status">Waiting for machine status.</p>
 <details class="compact-help"><summary>About MDI commands</summary><p>Commands execute on the real machine. An acknowledgement confirms submission, not motion completion. Losing the connection does not automatically stop an active MDI move.</p></details>
 </form>
-<div class="mdi-history"><div class="panel-heading"><h2>Session submissions</h2><button id="mdi-clear-history" class="secondary" type="button">Clear</button></div><ol id="mdi-history" aria-label="MDI command history"></ol></div></article>
+<div class="mdi-history"><div class="panel-heading"><h2>MDI macros</h2><button id="mdi-edit-macros" type="button" class="secondary">Edit macros</button></div><div id="mdi-macros" class="mdi-macros"></div><div class="panel-heading"><h2>Session submissions</h2><button id="mdi-clear-history" class="secondary" type="button">Clear</button></div><ol id="mdi-history" aria-label="MDI command history"></ol><p class="muted small mdi-history-help">Double-click a command to edit it, then press Enter to send. Submission is not motion completion.</p></div></article>
 </section>
 <p id="error" class="error" role="alert" hidden></p>
 <footer><span title="The network button does not replace the physical E-stop circuit.">XYUV · LinuxCNC · Software controls</span><span id="updated">No status updates</span></footer>
